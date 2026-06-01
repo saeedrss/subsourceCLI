@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subsourceCLI"
+version = "1.0.0"
+description = "Download Farsi subtitles for video files via SubSource API"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.25.0",
+]
+
+[project.scripts]
+subsourceCLI = "subsourceCLI.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
