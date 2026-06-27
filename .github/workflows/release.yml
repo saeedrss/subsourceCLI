@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.target }}
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -18,16 +18,16 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            ext: .exe
+            name: x86_64-windows
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            ext: ""
+            name: x86_64-linux
           - os: macos-latest
             target: x86_64-apple-darwin
-            ext: ""
+            name: x86_64-macos
           - os: macos-latest
             target: aarch64-apple-darwin
-            ext: ""
+            name: aarch64-macos
 
     steps:
       - uses: actions/checkout@v4
@@ -41,21 +41,21 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
         working-directory: sub-rs
 
-      - name: Package artifact
+      - name: Rename binary
         shell: bash
         run: |
           cd sub-rs/target/${{ matrix.target }}/release
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            7z a ../../../../sub-rs-${{ matrix.target }}.zip sub-rs.exe
+            mv sub-rs.exe sub-rs-${{ matrix.name }}.exe
           else
-            tar czf ../../../../sub-rs-${{ matrix.target }}.tar.gz sub-rs
+            mv sub-rs sub-rs-${{ matrix.name }}
           fi
 
-      - name: Upload artifact
+      - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}
-          path: sub-rs-${{ matrix.target }}.*
+          name: ${{ matrix.name }}
+          path: sub-rs/target/${{ matrix.target }}/release/sub-rs-${{ matrix.name }}*
 
   release:
     needs: build
