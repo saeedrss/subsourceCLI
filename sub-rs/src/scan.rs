@@ -10,6 +10,32 @@ use zip::ZipArchive;
 pub const VIDEO_EXTENSIONS: &[&str] = &[".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".m4v", ".webm"];
 pub const SUBTITLE_EXTENSIONS: &[&str] = &[".srt", ".ass", ".ssa", ".sub", ".vtt", ".txt"];
 
+pub const LANGUAGES: &[(&str, &str, &[&str])] = &[
+    ("fa", "Farsi/Persian", &["farsi_persian", "farsi", "persian", "fa"]),
+    ("en", "English", &["english", "en"]),
+    ("ar", "Arabic", &["arabic", "ar"]),
+    ("fr", "French", &["french", "fr"]),
+    ("de", "German", &["german", "de"]),
+    ("es", "Spanish", &["spanish", "es"]),
+    ("ru", "Russian", &["russian", "ru"]),
+    ("tr", "Turkish", &["turkish", "tr"]),
+    ("ur", "Urdu", &["urdu", "ur"]),
+    ("ku", "Kurdish", &["kurdish", "ku"]),
+    ("it", "Italian", &["italian", "it"]),
+    ("pt", "Portuguese", &["portuguese", "pt"]),
+    ("nl", "Dutch", &["dutch", "nl"]),
+    ("zh", "Chinese", &["chinese", "zh"]),
+    ("hi", "Hindi", &["hindi", "hi"]),
+    ("bn", "Bengali", &["bengali", "bn"]),
+    ("ps", "Pashto", &["pashto", "ps"]),
+    ("az", "Azerbaijani", &["azerbaijani", "az"]),
+    ("ckb", "Sorani Kurdish", &["sorani_kurdish", "ckb"]),
+];
+
+pub fn get_api_lang_codes(code: &str) -> Option<&'static [&'static str]> {
+    LANGUAGES.iter().find(|(c, _, _)| *c == code).map(|(_, _, codes)| *codes)
+}
+
 static BRACKETS_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[\[\(].*?[\]\)]").unwrap());
 static BRACES_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{.*?\}").unwrap());
 static EPISODE_RE: LazyLock<Regex> =
@@ -217,6 +243,7 @@ pub fn process_video(
     client: &Client,
     top_n: usize,
     dry_run: bool,
+    lang: &str,
     log: &dyn Fn(&str),
 ) -> Result<bool> {
     log(&format!(
@@ -238,7 +265,7 @@ pub fn process_video(
     let sub_dir = parent_dir.join("sub");
     std::fs::create_dir_all(&sub_dir)?;
 
-    let best_path = parent_dir.join(format!("{}.fa.srt", base_name));
+    let best_path = parent_dir.join(format!("{}.{}.srt", base_name, lang));
     if best_path.exists() {
         log(&format!(
             "  [INFO] Best subtitle already extracted: {}\n",
@@ -288,17 +315,18 @@ pub fn process_video(
         movie_id_str
     ));
 
-    log("  [LANG] Searching for Farsi/Persian subtitles...\n");
-    let lang_codes = ["farsi_persian", "farsi", "persian", "fa"];
-    let subtitles = lang_codes.iter().find_map(|lang| {
-        log(&format!("    [TRY] Language code: '{}'...\n", lang));
-        client.get_subtitles(&movie_id_str, lang).ok().filter(|s| !s.is_empty())
+    log(&format!("  [LANG] Searching for '{}' subtitles...\n", lang));
+    let fallback = [lang];
+    let api_codes = get_api_lang_codes(lang).unwrap_or(&fallback);
+    let subtitles = api_codes.iter().find_map(|code| {
+        log(&format!("    [TRY] Language code: '{}'...\n", code));
+        client.get_subtitles(&movie_id_str, code).ok().filter(|s| !s.is_empty())
     });
 
     let subtitles = match subtitles {
         Some(s) => s,
         None => {
-            log("  [ERROR] No Farsi/Persian subtitles found\n");
+            log(&format!("  [ERROR] No '{}' subtitles found\n", lang));
             return Ok(false);
         }
     };
@@ -406,7 +434,7 @@ pub fn process_video(
             log(&format!("         [INFO] Already exists: {}\n", zip_name));
             if is_best && !best_path.exists() {
                 log("         [EXTRACT] Extracting existing best match...\n");
-                if extract_and_rename_best(&zip_path, video_path, &file_info, log).unwrap_or(false) {
+                if extract_and_rename_best(&zip_path, video_path, &file_info, lang, log).unwrap_or(false) {
                     extracted = true;
                 }
             }
@@ -419,7 +447,7 @@ pub fn process_video(
                 log(&format!("         [SUCCESS] Saved: {}\n", zip_name));
                 if is_best {
                     log("         [EXTRACT] Extracting best match...\n");
-                    if extract_and_rename_best(&zip_path, video_path, &file_info, log)
+                    if extract_and_rename_best(&zip_path, video_path, &file_info, lang, log)
                         .unwrap_or(false)
                     {
                         extracted = true;
@@ -443,6 +471,7 @@ pub fn extract_and_rename_best(
     zip_path: &Path,
     video_path: &Path,
     file_info: &FileInfo,
+    lang: &str,
     log: &dyn Fn(&str),
 ) -> Result<bool> {
     let stem = video_path.file_stem().unwrap_or_default().to_string_lossy();
@@ -484,7 +513,7 @@ pub fn extract_and_rename_best(
         let name = archive.by_index(sub_indices[0]).unwrap().name().to_string();
         let src = extract_dir.join(&name);
         let suffix = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-        let dst = parent.join(format!("{}.fa{}", stem, suffix));
+        let dst = parent.join(format!("{}.{}{}", stem, lang, suffix));
         if dst.exists() {
             std::fs::rename(&dst, dst.with_extension("srt.backup"))?;
         }
@@ -514,7 +543,7 @@ pub fn extract_and_rename_best(
             Some(f) => {
                 let src = extract_dir.join(&f);
                 let suffix = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-                let dst = parent.join(format!("{}.fa{}", stem, suffix));
+                let dst = parent.join(format!("{}.{}{}", stem, lang, suffix));
                 if dst.exists() {
                     std::fs::rename(&dst, dst.with_extension("srt.backup"))?;
                 }
@@ -550,7 +579,7 @@ pub fn extract_and_rename_best(
         let name = archive.by_index(sub_indices[0]).unwrap().name().to_string();
         let src = extract_dir.join(&name);
         let suffix = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-        let dst = parent.join(format!("{}.fa{}", stem, suffix));
+        let dst = parent.join(format!("{}.{}{}", stem, lang, suffix));
         if dst.exists() {
             std::fs::rename(&dst, dst.with_extension("srt.backup"))?;
         }
@@ -572,6 +601,7 @@ pub fn scan_directory(
     top_n: usize,
     recursive: bool,
     dry_run: bool,
+    lang: &str,
     log: &dyn Fn(&str),
 ) -> Result<Stats> {
     let mut stats = Stats::new();
@@ -588,7 +618,7 @@ pub fn scan_directory(
     log(&format!("Found {} video file(s)\n", videos.len()));
 
     for video in &videos {
-        match process_video(video, client, top_n, dry_run, log) {
+        match process_video(video, client, top_n, dry_run, lang, log) {
             Ok(true) => {
                 stats.found += 1;
                 stats.downloaded += 1;

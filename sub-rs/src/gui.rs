@@ -31,6 +31,7 @@ pub struct SubGui {
     recursive: bool,
     api_key: String,
     proxy: String,
+    proxy_enabled: bool,
     files: Vec<FileRow>,
     log_text: String,
     stats_text: String,
@@ -39,10 +40,12 @@ pub struct SubGui {
     rx: Receiver<GuiEvent>,
     tx: Sender<GuiEvent>,
     lang_fa: bool,
+    show_about: bool,
+    subtitle_lang: String,
 }
 
 impl SubGui {
-    pub fn new(api_key: Option<String>, proxy: Option<String>) -> Self {
+    pub fn new(api_key: Option<String>, proxy: Option<String>, lang: &str) -> Self {
         let (tx, rx) = mpsc::channel();
         SubGui {
             directory: String::new(),
@@ -51,6 +54,7 @@ impl SubGui {
             recursive: true,
             api_key: api_key.unwrap_or_default(),
             proxy: proxy.unwrap_or_default(),
+            proxy_enabled: false,
             files: Vec::new(),
             log_text: String::new(),
             stats_text: String::new(),
@@ -59,6 +63,8 @@ impl SubGui {
             rx,
             tx,
             lang_fa: false,
+            show_about: false,
+            subtitle_lang: lang.to_string(),
         }
     }
 
@@ -70,12 +76,13 @@ impl SubGui {
         }
 
         let api_key = self.api_key.clone();
-        let proxy = if self.proxy.is_empty() { None } else { Some(self.proxy.clone()) };
+        let proxy = if self.proxy_enabled && !self.proxy.is_empty() { Some(self.proxy.clone()) } else { None };
         let top_n = self.top_n;
         let dry_run = self.dry_run;
         let recursive = self.recursive;
         let dir = PathBuf::from(&self.directory);
         let tx = self.tx.clone();
+        let lang = self.subtitle_lang.clone();
 
         self.files.clear();
         self.log_text.clear();
@@ -110,7 +117,7 @@ impl SubGui {
 
                 let tx2 = tx.clone();
                 let video_log: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
-                let result = scan::process_video(video, &client, top_n, dry_run, &|msg| {
+                let result = scan::process_video(video, &client, top_n, dry_run, &lang, &|msg| {
                     video_log.borrow_mut().push_str(msg);
                     tx2.send(GuiEvent::Log(msg.to_string())).ok();
                 });
@@ -190,6 +197,9 @@ impl eframe::App for SubGui {
                         self.directory = dir.to_string_lossy().to_string();
                     }
                 }
+                if ui.button(if self.lang_fa { "درباره" } else { "About" }).clicked() {
+                    self.show_about = true;
+                }
                 if ui.button(if self.lang_fa { "خروج" } else { "Exit" }).clicked() {
                     std::process::exit(0);
                 }
@@ -198,6 +208,15 @@ impl eframe::App for SubGui {
                 ui.add(egui::DragValue::new(&mut self.top_n).range(1..=50).speed(1));
                 ui.checkbox(&mut self.dry_run, if self.lang_fa { "آزمایشی" } else { "Dry Run" });
                 ui.checkbox(&mut self.recursive, if self.lang_fa { "به‌همراه زیرپوشه‌ها" } else { "Recursive" });
+                ui.separator();
+                ui.label(if self.lang_fa { "زیرنویس:" } else { "Sub:" });
+                egui::ComboBox::from_id_salt("lang_selector")
+                    .selected_text(&self.subtitle_lang)
+                    .show_ui(ui, |ui| {
+                        for (code, name, _) in scan::LANGUAGES {
+                            ui.selectable_value(&mut self.subtitle_lang, code.to_string(), format!("{} — {}", code, name));
+                        }
+                    });
                 if ui.button(if self.lang_fa { "شروع اسکن" } else { "Start Scan" })
                     .clicked()
                     && !self.scanning
@@ -213,12 +232,20 @@ impl eframe::App for SubGui {
             ui.horizontal(|ui| {
                 ui.label(if self.lang_fa { "API Key:" } else { "API Key:" });
                 ui.add(egui::TextEdit::singleline(&mut self.api_key).password(true).hint_text("sk_..."));
-                ui.label(if self.lang_fa { "Proxy:" } else { "Proxy:" });
-                ui.add(egui::TextEdit::singleline(&mut self.proxy).hint_text("http://..."));
+                ui.checkbox(&mut self.proxy_enabled, if self.lang_fa { "پروکسی" } else { "Proxy" });
+                ui.add_enabled(self.proxy_enabled, egui::TextEdit::singleline(&mut self.proxy).hint_text("http://..."));
             });
             if !self.directory.is_empty() {
                 ui.label(&self.directory);
             }
+        });
+
+        egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Made by ");
+                ui.hyperlink_to("saeedrss", "https://github.com/saeedrss/subsourceCLI");
+                ui.label("— Subsource subtitle downloader");
+            });
         });
 
         egui::SidePanel::left("files_panel")
@@ -283,5 +310,19 @@ impl eframe::App for SubGui {
                     self.log_text = log;
                 });
         });
+
+        if self.show_about {
+            egui::Window::new("About").show(ctx, |ui| {
+                ui.label("Subsource Farsi Subtitle Downloader");
+                ui.label("Version 1.0.0");
+                ui.separator();
+                ui.label("Developed by:");
+                ui.hyperlink_to("saeedrss", "https://github.com/saeedrss/subsourceCLI");
+                ui.separator();
+                if ui.button("Close").clicked() {
+                    self.show_about = false;
+                }
+            });
+        }
     }
 }

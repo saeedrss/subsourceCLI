@@ -7,7 +7,7 @@ use clap::Parser;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "sub-rs", about = "Download Farsi subtitles")]
+#[command(name = "sub-rs", about = "Download subtitles via SubSource API")]
 struct Cli {
     #[arg(short, long)]
     directory: Option<String>,
@@ -26,6 +26,9 @@ struct Cli {
 
     #[arg(long)]
     proxy: Option<String>,
+
+    #[arg(short, long, default_value = "fa")]
+    lang: String,
 
     #[arg(long)]
     gui: bool,
@@ -87,6 +90,7 @@ fn run_cli(cli: &Cli) -> Result<()> {
         cli.top,
         !cli.no_recursive,
         cli.dry_run,
+        &cli.lang,
         &|msg| print!("{}", msg),
     )?;
 
@@ -122,9 +126,9 @@ fn main() -> Result<()> {
             ..Default::default()
         };
 
-        let app = gui::SubGui::new(api_key, proxy);
+        let app = gui::SubGui::new(api_key, proxy, &cli.lang);
         eframe::run_native(
-            "SubSource Farsi Subtitle Downloader",
+            "SubSource Subtitle Downloader",
             options,
             Box::new(|_cc| Ok(Box::new(app))),
         )
