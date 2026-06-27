@@ -314,7 +314,7 @@ impl eframe::App for SubGui {
         if self.show_about {
             egui::Window::new("About").show(ctx, |ui| {
                 ui.label("Subsource Farsi Subtitle Downloader");
-                ui.label("Version 1.0.0");
+                ui.label("Version 1.1.0");
                 ui.separator();
                 ui.label("Developed by:");
                 ui.hyperlink_to("saeedrss", "https://github.com/saeedrss/subsourceCLI");
