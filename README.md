@@ -4,20 +4,53 @@ Downloads Farsi/Persian subtitles for video files via the
 [SubSource](https://subsource.net) API. Extracts the best match as
 `video.fa.srt` alongside the video and keeps top-N ZIP backups.
 
-Three interfaces are available:
+Four interfaces are available:
 
-- **GUI** (`gui.py`) — DearPyGui desktop application with bilingual EN/FA support
-- **Package** (`subsourceCLI/`) — pip-installable CLI with no hardcoded fallback
-- **Script** (`script.py`) — standalone single-file CLI with built-in fallback key
+- **Rust CLI** (`sub-rs`) — compiled binary, single-file, cross-platform
+- **Rust GUI** (`sub-rs --gui`) — egui desktop application
+- **Python GUI** (`gui.py`) — DearPyGui desktop application with bilingual EN/FA support
+- **Python CLI** (`script.py` / `subsourceCLI/`) — pip-installable or standalone
 
-## Quick Start (GUI)
+## Quick Start (Rust)
+
+Pre-built binaries on the [Releases page](https://github.com/saeedrss/subsourceCLI/releases):
+
+```bash
+# CLI — scan directory and download best Farsi subtitles
+./sub-rs --directory "/path/to/videos"
+
+# GUI — launch the desktop app
+./sub-rs --gui
+```
+
+Or build from source:
+
+```bash
+cd sub-rs
+cargo build --release
+./target/release/sub-rs --directory "/path/to/videos"
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--directory` | `.` | Directory to scan for video files |
+| `--top` | `5` | Number of subtitle candidates to keep |
+| `--api-key` | `SUBSOURCE_API_KEY` env or config file | API key (no hardcoded fallback) |
+| `--dry-run` | — | Log actions without downloading |
+| `--no-recursive` | — | Only scan directory root |
+| `--proxy` | `None` | Proxy URL (e.g. `http://127.0.0.1:8080`) |
+| `--gui` | — | Launch GUI instead of CLI |
+
+API key resolution: `--api-key` > `SUBSOURCE_API_KEY` env var > `~/.config/subsource/config.json`.
+
+## Quick Start (Python GUI)
 
 ```bash
 pip install dearpygui arabic-reshaper python-bidi requests
 python gui.py
 ```
 
-## Quick Start (CLI)
+## Quick Start (Python CLI)
 
 ```bash
 pip install -r requirements.txt
@@ -85,12 +118,14 @@ sub/
 
 ## Features
 
+- Rust binary: single ~10 MB executable, no Python/runtime needed
+- Rust GUI: egui immediate-mode, runs on Windows/macOS/Linux
 - Parses `S01E01` style episode markers, matches subtitles by season & episode
 - Falls back to folder name when filename has no recognizable title
 - Applies 1-second rate limiting between API calls
 - Sanitizes non-ASCII characters for Windows console compatibility
-- GUI: bilingual English/Farsi with persistent language preference
-- GUI: real-time per-file progress and log output
+- Python GUI: bilingual English/Farsi with persistent language preference
+- Python GUI: real-time per-file progress and log output
 
 ## Repository
 

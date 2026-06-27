@@ -138,6 +138,7 @@ LANG = {
 current_lang = "en"
 farsi_font_tag = None
 labeled_items = []
+state = None
 
 
 def tr(key, *args):
@@ -149,18 +150,26 @@ def tr(key, *args):
 
 
 def save_config():
+    global state
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump({"language": current_lang}, f, ensure_ascii=False)
+        json.dump({
+            "language": current_lang,
+            "api_key": state.api_key,
+            "proxy": state.proxy,
+        }, f, ensure_ascii=False)
 
 
 def load_config():
-    global current_lang
+    global current_lang, state
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 current_lang = data.get("language", "en")
+                if state:
+                    state.api_key = data.get("api_key", state.api_key)
+                    state.proxy = data.get("proxy", state.proxy)
                 return True
         except Exception:
             pass
@@ -242,6 +251,7 @@ def dpg_set_threadsafe(tag, **kwargs):
 
 
 def select_directory(sender, app_data):
+    global state
     if app_data and "file_path_name" in app_data:
         state.directory = app_data["file_path_name"]
         dpg_set_threadsafe("directory_path", value=state.directory)
@@ -267,6 +277,7 @@ def _update_file_row(idx, icon, status_text="Done"):
 
 
 def on_file_select(sender, app_data, user_data):
+    global state
     data = user_data
     if data is None:
         return
@@ -282,6 +293,7 @@ def on_file_select(sender, app_data, user_data):
 
 
 def on_scan():
+    global state
     if state.scanning:
         return
     if not state.directory or not Path(state.directory).exists():
@@ -389,6 +401,7 @@ def on_scan():
 
 
 def render():
+    global state
     while not dpg_updates.empty():
         tag, kwargs = dpg_updates.get_nowait()
         try:
@@ -431,6 +444,7 @@ def render():
 
 
 def setup_ui():
+    global state
     dpg.create_context()
 
     # ── Font ──
@@ -507,9 +521,11 @@ def setup_ui():
         labeled_items.append(("api_key_window", "api_key_title"))
 
         def save_api_key():
+            global state
             key = dpg.get_value("api_key_input")
             if key:
                 state.api_key = key
+                save_config()
                 dpg.configure_item("api_key_window", show=False)
                 dpg_set_threadsafe("global_log", value="\n[INFO] " + tr("api_key_updated") + "\n")
             else:
@@ -535,8 +551,10 @@ def setup_ui():
         labeled_items.append(("proxy_window", "proxy_title"))
 
         def save_proxy():
+            global state
             proxy = dpg.get_value("proxy_input")
             state.proxy = proxy
+            save_config()
             dpg.configure_item("proxy_window", show=False)
             dpg_set_threadsafe("global_log", value="\n[INFO] " + tr("proxy_updated") + "\n")
 
@@ -597,18 +615,18 @@ def setup_ui():
 
             with dpg.menu(label=tr("settings_menu")) as sm:
                 labeled_items.append((sm, "settings_menu"))
-                dpg.add_menu_item(
-                    label=tr("api_key_menu"),
-                    tag="menu_api_key",
-                    callback=lambda: dpg.configure_item("api_key_window", show=True),
-                )
-                labeled_items.append(("menu_api_key", "api_key_menu"))
-                dpg.add_menu_item(
-                    label=tr("proxy_menu"),
-                    tag="menu_proxy",
-                    callback=lambda: dpg.configure_item("proxy_window", show=True),
-                )
-                labeled_items.append(("menu_proxy", "proxy_menu"))
+            dpg.add_menu_item(
+                label=tr("api_key_menu"),
+                tag="menu_api_key",
+                callback=lambda: (dpg.set_value("api_key_input", state.api_key), dpg.configure_item("api_key_window", show=True)),
+            )
+            labeled_items.append(("menu_api_key", "api_key_menu"))
+            dpg.add_menu_item(
+                label=tr("proxy_menu"),
+                tag="menu_proxy",
+                callback=lambda: (dpg.set_value("proxy_input", state.proxy), dpg.configure_item("proxy_window", show=True)),
+            )
+            labeled_items.append(("menu_proxy", "proxy_menu"))
 
             with dpg.menu(label=tr("help_menu")) as hm:
                 labeled_items.append((hm, "help_menu"))
