@@ -126,6 +126,11 @@ pub fn parse_filename(filename: &str) -> FileInfo {
 
     if let Some(m) = YEAR_RE.find(&no_brackets) {
         info.year = Some(m.as_str().to_string());
+        if !info.is_episode {
+            if let Some(pos) = name.find(m.as_str()) {
+                name.truncate(pos + m.as_str().len());
+            }
+        }
     }
 
     if info.is_episode {
