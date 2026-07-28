@@ -1,6 +1,7 @@
 mod client;
 mod gui;
 mod scan;
+mod updater;
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
@@ -111,10 +112,23 @@ fn run_cli(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
+#[cfg(windows)]
+fn hide_console() {
+    extern "system" {
+        fn FreeConsole() -> i32;
+    }
+    unsafe { FreeConsole(); }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    let update = updater::check_for_update(env!("CARGO_PKG_VERSION"));
+
     if cli.gui || cli.directory.is_none() {
+        #[cfg(windows)]
+        hide_console();
+
         let (env_key, file_proxy) = load_config();
         let api_key = cli.api_key.or(env_key);
         let proxy = cli.proxy.or(file_proxy);
@@ -126,7 +140,7 @@ fn main() -> Result<()> {
             ..Default::default()
         };
 
-        let app = gui::SubGui::new(api_key, proxy, &cli.lang);
+        let app = gui::SubGui::new(api_key, proxy, &cli.lang, update);
         eframe::run_native(
             "SubSource Subtitle Downloader",
             options,
@@ -135,6 +149,13 @@ fn main() -> Result<()> {
         .ok();
         Ok(())
     } else {
+        if let Some(u) = &update {
+            println!("\n{}", "=".repeat(70));
+            println!("[UPDATE] New version available: {} (current: v{})", u.latest_version, env!("CARGO_PKG_VERSION"));
+            println!("{}", "=".repeat(70));
+            println!("{}", u.body);
+            println!("{}", "=".repeat(70));
+        }
         run_cli(&cli)
     }
 }

@@ -51,7 +51,7 @@ static TECH_RE: LazyLock<Regex> = LazyLock::new(|| {
          VideoGod|WORLD|CONDITION|SyncUp|GainfulCapedHyraxOfPiety|SuccessfulCrab|EniaHD|\
          APEX|SPARKS|GECKOS|DRACULA|ROVERS|LAZY|DEFLATE|DEMAND|NTb|KiNGS|Cinefeel|\
          TRASHCAN|GalaxyTV|FLUX|HONE|KOGi|mSD|BAMBOOLEZ|MiNX|ION10|PSA|RARBG|YTS|AMIABLE|\
-         REMUX|Complete|UNRATED|UNCUT|PROPER|REPACK|EXTENDED|DIRECTORS?\.?CUT|DC|\
+         REMUX|Complete|UNRATED|UNCUT|PROPER|REPACK|EXTENDED\s*CUT|EXTENDED|DIRECTORS?\.?CUT|DC|\
          Sample|Samples|Trailer|Featurette|\
          S\d{1,2}E\d{1,2}|Season\s*\d+|Episode\s*\d+|\
          www\..*?\.org|www\..*?\.com|www\..*?\.net",

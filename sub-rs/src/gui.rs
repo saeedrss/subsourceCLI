@@ -1,5 +1,6 @@
 use crate::client::Client;
 use crate::scan::{self, Stats};
+use crate::updater;
 use eframe::egui;
 use eframe::egui::Widget;
 use std::path::PathBuf;
@@ -36,17 +37,21 @@ pub struct SubGui {
     log_text: String,
     stats_text: String,
     scanning: bool,
+    show_global_log: bool,
     sel: Option<usize>,
     rx: Receiver<GuiEvent>,
     tx: Sender<GuiEvent>,
     lang_fa: bool,
     show_about: bool,
+    show_update: bool,
+    update_info: Option<updater::UpdateInfo>,
     subtitle_lang: String,
 }
 
 impl SubGui {
-    pub fn new(api_key: Option<String>, proxy: Option<String>, lang: &str) -> Self {
+    pub fn new(api_key: Option<String>, proxy: Option<String>, lang: &str, update: Option<updater::UpdateInfo>) -> Self {
         let (tx, rx) = mpsc::channel();
+        let show_update = update.is_some();
         SubGui {
             directory: String::new(),
             top_n: 5,
@@ -59,11 +64,14 @@ impl SubGui {
             log_text: String::new(),
             stats_text: String::new(),
             scanning: false,
+            show_global_log: true,
             sel: None,
             rx,
             tx,
             lang_fa: false,
             show_about: false,
+            show_update,
+            update_info: update,
             subtitle_lang: lang.to_string(),
         }
     }
@@ -116,13 +124,13 @@ impl SubGui {
                 tx.send(GuiEvent::FileAdded(idx, fname.clone(), ep, String::new())).ok();
 
                 let tx2 = tx.clone();
+                let tx3 = tx.clone();
                 let video_log: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
                 let result = scan::process_video(video, &client, top_n, dry_run, &lang, &|msg| {
                     video_log.borrow_mut().push_str(msg);
                     tx2.send(GuiEvent::Log(msg.to_string())).ok();
+                    tx3.send(GuiEvent::FileDetail(idx, video_log.borrow().clone())).ok();
                 });
-
-                tx.send(GuiEvent::FileDetail(idx, video_log.take())).ok();
 
                 match result {
                     Ok(true) => {
@@ -258,6 +266,16 @@ impl eframe::App for SubGui {
                     ui.label(&self.stats_text);
                     ui.separator();
 
+                    let log_selected = self.show_global_log;
+                    let log_resp = ui.selectable_label(
+                        log_selected,
+                        if log_selected { "📋 Global Log" } else { "📋 Global Log" },
+                    );
+                    if log_resp.clicked() {
+                        self.show_global_log = true;
+                        self.sel = None;
+                    }
+
                     egui::ScrollArea::vertical()
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
@@ -278,37 +296,38 @@ impl eframe::App for SubGui {
                             }
                             if let Some(i) = clicked {
                                 self.sel = Some(i);
+                                self.show_global_log = false;
                             }
                         });
                 });
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some(idx) = self.sel {
+            if self.show_global_log || self.sel.is_none() {
+                ui.label(if self.lang_fa { "لاگ کلی" } else { "Global Log" });
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false; 2])
+                    .show(ui, |ui| {
+                        let mut log = self.log_text.clone();
+                        egui::TextEdit::multiline(&mut log)
+                            .desired_width(f32::INFINITY)
+                            .desired_rows(10)
+                            .ui(ui);
+                        self.log_text = log;
+                    });
+            } else if let Some(idx) = self.sel {
                 if let Some(f) = self.files.get(idx) {
                     ui.label(&f.name);
                     ui.separator();
                     egui::ScrollArea::vertical()
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
-                            egui::TextEdit::multiline(&mut f.detail.clone())
-                                .desired_width(f32::INFINITY)
-                                .desired_rows(10)
-                                .ui(ui);
+                            ui.label(&f.detail);
                         });
                     ui.separator();
                 }
             }
-            egui::ScrollArea::vertical()
-                .auto_shrink([false; 2])
-                .show(ui, |ui| {
-                    let mut log = self.log_text.clone();
-                    egui::TextEdit::multiline(&mut log)
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(10)
-                        .ui(ui);
-                    self.log_text = log;
-                });
         });
 
         if self.show_about {
@@ -323,6 +342,28 @@ impl eframe::App for SubGui {
                     self.show_about = false;
                 }
             });
+        }
+
+        if self.show_update {
+            if let Some(ref info) = self.update_info {
+                egui::Window::new("Update Available")
+                    .collapsible(false)
+                    .resizable(true)
+                    .default_size([500.0, 400.0])
+                    .show(ctx, |ui| {
+                        ui.heading(format!("New version: {}", info.latest_version));
+                        ui.separator();
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui| {
+                                ui.label(&info.body);
+                            });
+                        ui.separator();
+                        if ui.button("Close").clicked() {
+                            self.show_update = false;
+                        }
+                    });
+            }
         }
     }
 }
