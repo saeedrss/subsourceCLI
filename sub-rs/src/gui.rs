@@ -31,6 +31,7 @@ pub struct SubGui {
     directory: String,
     top_n: usize,
     dry_run: bool,
+    skip_existing: bool,
     recursive: bool,
     api_key: String,
     proxy: String,
@@ -65,6 +66,7 @@ impl SubGui {
             directory: String::new(),
             top_n: 5,
             dry_run: false,
+            skip_existing: false,
             recursive: true,
             api_key: api_key.unwrap_or_default(),
             proxy: proxy.as_deref().unwrap_or("").to_string(),
@@ -104,6 +106,7 @@ impl SubGui {
         let top_n = self.top_n;
         let dry_run = self.dry_run;
         let recursive = self.recursive;
+        let skip_existing = self.skip_existing;
         let dir = PathBuf::from(&self.directory);
         let tx = self.tx.clone();
         let lang = self.subtitle_lang.clone();
@@ -142,7 +145,7 @@ impl SubGui {
                 let tx2 = tx.clone();
                 let tx3 = tx.clone();
                 let video_log: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
-                let result = scan::process_video(video, &client, top_n, dry_run, &lang, &|msg| {
+                let result = scan::process_video(video, &client, top_n, dry_run, &lang, skip_existing, &|msg| {
                     video_log.borrow_mut().push_str(msg);
                     tx2.send(GuiEvent::Log(msg.to_string())).ok();
                     tx3.send(GuiEvent::FileDetail(idx, video_log.borrow().clone())).ok();
@@ -298,6 +301,7 @@ impl eframe::App for SubGui {
                 ui.label(if self.lang_fa { "تعداد:" } else { "Top N:" });
                 ui.add(egui::DragValue::new(&mut self.top_n).range(1..=50).speed(1));
                 ui.checkbox(&mut self.dry_run, if self.lang_fa { "آزمایشی" } else { "Dry Run" });
+                ui.checkbox(&mut self.skip_existing, if self.lang_fa { "رد فیلم‌های دارای زیرنویس" } else { "Skip Existing" });
                 ui.checkbox(&mut self.recursive, if self.lang_fa { "به‌همراه زیرپوشه‌ها" } else { "Recursive" });
                 ui.separator();
                 ui.label(if self.lang_fa { "زیرنویس:" } else { "Sub:" });
@@ -445,7 +449,7 @@ impl eframe::App for SubGui {
         if self.show_about {
             egui::Window::new("About").show(ctx, |ui| {
                 ui.label("Subsource Farsi Subtitle Downloader");
-                ui.label("Version 1.1.0");
+                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                 ui.separator();
                 ui.label("Developed by:");
                 ui.hyperlink_to("saeedrss", "https://github.com/saeedrss/subsourceCLI");

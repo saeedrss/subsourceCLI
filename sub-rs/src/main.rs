@@ -33,6 +33,9 @@ struct Cli {
     lang: String,
 
     #[arg(long)]
+    skip_existing: bool,
+
+    #[arg(long)]
     gui: bool,
 }
 
@@ -93,6 +96,7 @@ fn run_cli(cli: &Cli) -> Result<()> {
         !cli.no_recursive,
         cli.dry_run,
         &cli.lang,
+        cli.skip_existing,
         &|msg| print!("{}", msg),
     )?;
 

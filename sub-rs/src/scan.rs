@@ -249,12 +249,22 @@ pub fn process_video(
     top_n: usize,
     dry_run: bool,
     lang: &str,
+    skip_existing: bool,
     log: &dyn Fn(&str),
 ) -> Result<bool> {
     log(&format!(
         "\n[FILE] Processing: {}\n",
         video_path.file_name().unwrap_or_default().to_string_lossy()
     ));
+
+    let base_name = video_path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let parent_dir = video_path.parent().unwrap();
+    let best_path = parent_dir.join(format!("{}.{}.srt", base_name, lang));
+
+    if skip_existing && best_path.exists() {
+        log(&format!("  [SKIP] Subtitle already exists: {}\n", best_path.file_name().unwrap().to_string_lossy()));
+        return Ok(true);
+    }
 
     let file_info =
         parse_filename(&video_path.file_name().unwrap_or_default().to_string_lossy());
@@ -265,8 +275,6 @@ pub fn process_video(
         file_info.episode.as_deref().unwrap_or("")
     ));
 
-    let base_name = video_path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-    let parent_dir = video_path.parent().unwrap();
     let sub_dir = parent_dir.join("sub");
     std::fs::create_dir_all(&sub_dir)?;
 
@@ -607,6 +615,7 @@ pub fn scan_directory(
     recursive: bool,
     dry_run: bool,
     lang: &str,
+    skip_existing: bool,
     log: &dyn Fn(&str),
 ) -> Result<Stats> {
     let mut stats = Stats::new();
@@ -623,7 +632,7 @@ pub fn scan_directory(
     log(&format!("Found {} video file(s)\n", videos.len()));
 
     for video in &videos {
-        match process_video(video, client, top_n, dry_run, lang, log) {
+        match process_video(video, client, top_n, dry_run, lang, skip_existing, log) {
             Ok(true) => {
                 stats.found += 1;
                 stats.downloaded += 1;
