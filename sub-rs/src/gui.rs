@@ -1,3 +1,4 @@
+use crate::ads;
 use crate::client::Client;
 use crate::scan::{self, Stats};
 use crate::updater;
@@ -15,6 +16,7 @@ enum GuiEvent {
     FileDetail(usize, String),
     SetStats(String),
     ScanDone,
+    UpdateResult(Option<updater::UpdateInfo>),
 }
 
 struct FileRow {
@@ -45,11 +47,18 @@ pub struct SubGui {
     show_about: bool,
     show_update: bool,
     update_info: Option<updater::UpdateInfo>,
+    prev_proxy: String,
+    prev_proxy_enabled: bool,
+    ad_data: Vec<ads::AdData>,
+    ad_textures: Vec<egui::TextureHandle>,
+    textures_loaded: bool,
+    scan_completed_once: bool,
+    show_ad_banner: bool,
     subtitle_lang: String,
 }
 
 impl SubGui {
-    pub fn new(api_key: Option<String>, proxy: Option<String>, lang: &str, update: Option<updater::UpdateInfo>) -> Self {
+    pub fn new(api_key: Option<String>, proxy: Option<String>, lang: &str, update: Option<updater::UpdateInfo>, ad_data: Vec<ads::AdData>) -> Self {
         let (tx, rx) = mpsc::channel();
         let show_update = update.is_some();
         SubGui {
@@ -58,8 +67,8 @@ impl SubGui {
             dry_run: false,
             recursive: true,
             api_key: api_key.unwrap_or_default(),
-            proxy: proxy.unwrap_or_default(),
-            proxy_enabled: false,
+            proxy: proxy.as_deref().unwrap_or("").to_string(),
+            proxy_enabled: proxy.is_some() && proxy.as_deref().unwrap_or("") != "",
             files: Vec::new(),
             log_text: String::new(),
             stats_text: String::new(),
@@ -72,6 +81,13 @@ impl SubGui {
             show_about: false,
             show_update,
             update_info: update,
+            prev_proxy: String::new(),
+            prev_proxy_enabled: false,
+            ad_data,
+            ad_textures: Vec::new(),
+            textures_loaded: false,
+            scan_completed_once: false,
+            show_ad_banner: false,
             subtitle_lang: lang.to_string(),
         }
     }
@@ -163,6 +179,24 @@ impl SubGui {
 
         self.scanning = true;
     }
+
+    fn reload_ads(&mut self) {
+        self.ad_data = ads::load_ads();
+        self.textures_loaded = false;
+    }
+
+    fn recheck_update(&self) {
+        let tx = self.tx.clone();
+        let proxy = if self.proxy_enabled && !self.proxy.is_empty() {
+            Some(self.proxy.clone())
+        } else {
+            None
+        };
+        std::thread::spawn(move || {
+            let result = updater::check_for_update(env!("CARGO_PKG_VERSION"), proxy.as_deref());
+            tx.send(GuiEvent::UpdateResult(result)).ok();
+        });
+    }
 }
 
 impl eframe::App for SubGui {
@@ -191,12 +225,61 @@ impl eframe::App for SubGui {
                     }
                 }
                 GuiEvent::SetStats(s) => self.stats_text = s,
-                GuiEvent::ScanDone => self.scanning = false,
+                GuiEvent::ScanDone => {
+                    self.scanning = false;
+                    self.scan_completed_once = true;
+                    self.show_ad_banner = true;
+                }
+                GuiEvent::UpdateResult(info) => {
+                    if let Some(ref u) = info {
+                        self.log_text.push_str(&format!("\n[UPDATE] New version available: {}\n{}\n", u.latest_version, u.body));
+                    }
+                    self.update_info = info;
+                    self.show_update = self.update_info.is_some();
+                }
             }
             ctx.request_repaint();
         }
 
+        if !self.textures_loaded && !self.ad_data.is_empty() {
+            self.ad_textures.clear();
+            for (i, ad) in self.ad_data.iter().enumerate() {
+                if ad.width == 0 || ad.height == 0 {
+                    continue;
+                }
+                let size = [ad.width as usize, ad.height as usize];
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &ad.rgba);
+                let texture = ctx.load_texture(
+                    format!("ad_{}", i),
+                    color_image,
+                    egui::TextureOptions::LINEAR,
+                );
+                self.ad_textures.push(texture);
+            }
+            self.textures_loaded = true;
+        }
+
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+            if self.show_update {
+                if let Some(ref info) = self.update_info.clone() {
+                    egui::Frame::none()
+                        .fill(egui::Color32::from_rgb(0, 100, 50))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(format!("⬆ Update available: {} (current: v{})", info.latest_version, env!("CARGO_PKG_VERSION")));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui.button("✕").clicked() {
+                                        self.show_update = false;
+                                    }
+                                    if ui.button("View on GitHub").clicked() {
+                                        let _ = webbrowser::open("https://github.com/saeedrss/subsourceCLI/releases/latest");
+                                        self.show_update = false;
+                                    }
+                                });
+                            });
+                        });
+                }
+            }
             ui.horizontal(|ui| {
                 if ui.button(if self.lang_fa { "انتخاب پوشه" } else { "Select Directory" })
                     .clicked()
@@ -242,6 +325,12 @@ impl eframe::App for SubGui {
                 ui.add(egui::TextEdit::singleline(&mut self.api_key).password(true).hint_text("sk_..."));
                 ui.checkbox(&mut self.proxy_enabled, if self.lang_fa { "پروکسی" } else { "Proxy" });
                 ui.add_enabled(self.proxy_enabled, egui::TextEdit::singleline(&mut self.proxy).hint_text("http://..."));
+                if self.prev_proxy != self.proxy || self.prev_proxy_enabled != self.proxy_enabled {
+                    self.prev_proxy = self.proxy.clone();
+                    self.prev_proxy_enabled = self.proxy_enabled;
+                    self.recheck_update();
+                    self.reload_ads();
+                }
             });
             if !self.directory.is_empty() {
                 ui.label(&self.directory);
@@ -299,10 +388,33 @@ impl eframe::App for SubGui {
                                 self.show_global_log = false;
                             }
                         });
+
+                    if let Some(tex) = self.ad_textures.first() {
+                        ui.separator();
+                        ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
+                    }
                 });
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            if self.show_ad_banner && self.ad_textures.len() > 1 {
+                if let Some(tex) = self.ad_textures.get(1) {
+                    egui::Frame::none()
+                        .fill(egui::Color32::from_rgb(20, 20, 40))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(200.0, 60.0)));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui.button("✕").clicked() {
+                                        self.show_ad_banner = false;
+                                    }
+                                });
+                            });
+                        });
+                    ui.separator();
+                }
+            }
+
             if self.show_global_log || self.sel.is_none() {
                 ui.label(if self.lang_fa { "لاگ کلی" } else { "Global Log" });
                 ui.separator();
@@ -344,26 +456,5 @@ impl eframe::App for SubGui {
             });
         }
 
-        if self.show_update {
-            if let Some(ref info) = self.update_info {
-                egui::Window::new("Update Available")
-                    .collapsible(false)
-                    .resizable(true)
-                    .default_size([500.0, 400.0])
-                    .show(ctx, |ui| {
-                        ui.heading(format!("New version: {}", info.latest_version));
-                        ui.separator();
-                        egui::ScrollArea::vertical()
-                            .auto_shrink([false; 2])
-                            .show(ui, |ui| {
-                                ui.label(&info.body);
-                            });
-                        ui.separator();
-                        if ui.button("Close").clicked() {
-                            self.show_update = false;
-                        }
-                    });
-            }
-        }
     }
 }

@@ -1,3 +1,4 @@
+mod ads;
 mod client;
 mod gui;
 mod scan;
@@ -123,15 +124,15 @@ fn hide_console() {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let update = updater::check_for_update(env!("CARGO_PKG_VERSION"));
+    let (env_key, file_proxy) = load_config();
+    let proxy = cli.proxy.clone().or(file_proxy);
+    let update = updater::check_for_update(env!("CARGO_PKG_VERSION"), proxy.as_deref());
 
     if cli.gui || cli.directory.is_none() {
         #[cfg(windows)]
         hide_console();
 
-        let (env_key, file_proxy) = load_config();
         let api_key = cli.api_key.or(env_key);
-        let proxy = cli.proxy.or(file_proxy);
 
         let options = eframe::NativeOptions {
             viewport: eframe::egui::ViewportBuilder::default()
@@ -140,7 +141,8 @@ fn main() -> Result<()> {
             ..Default::default()
         };
 
-        let app = gui::SubGui::new(api_key, proxy, &cli.lang, update);
+        let ad_data = ads::load_ads();
+        let app = gui::SubGui::new(api_key, proxy, &cli.lang, update, ad_data);
         eframe::run_native(
             "SubSource Subtitle Downloader",
             options,

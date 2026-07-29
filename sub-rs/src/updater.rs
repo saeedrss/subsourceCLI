@@ -22,12 +22,18 @@ fn parse_version(v: &str) -> Vec<u32> {
         .collect()
 }
 
-pub fn check_for_update(current: &str) -> Option<UpdateInfo> {
-    let client = match reqwest::blocking::Client::builder()
+pub fn check_for_update(current: &str, proxy: Option<&str>) -> Option<UpdateInfo> {
+    let mut builder = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(TIMEOUT_SECS))
-        .user_agent("sub-rs/1.0")
-        .build()
-    {
+        .user_agent("sub-rs/1.0");
+    if let Some(p) = proxy {
+        if !p.is_empty() {
+            if let Ok(proxy) = reqwest::Proxy::all(p) {
+                builder = builder.proxy(proxy);
+            }
+        }
+    }
+    let client = match builder.build() {
         Ok(c) => c,
         Err(_) => return None,
     };
