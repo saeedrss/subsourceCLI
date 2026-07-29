@@ -244,20 +244,23 @@ impl eframe::App for SubGui {
             ctx.request_repaint();
         }
 
-        if !self.textures_loaded && !self.ad_data.is_empty() {
+        if !self.textures_loaded {
             self.ad_textures.clear();
-            for (i, ad) in self.ad_data.iter().enumerate() {
-                if ad.width == 0 || ad.height == 0 {
-                    continue;
+            if !self.ad_data.is_empty() {
+                for (i, ad) in self.ad_data.iter().enumerate() {
+                    if ad.width == 0 || ad.height == 0 {
+                        continue;
+                    }
+                    let size = [ad.width as usize, ad.height as usize];
+                    let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &ad.rgba);
+                    let texture = ctx.load_texture(
+                        format!("ad_{}", i),
+                        color_image,
+                        egui::TextureOptions::LINEAR,
+                    );
+                    self.ad_textures.push(texture);
                 }
-                let size = [ad.width as usize, ad.height as usize];
-                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &ad.rgba);
-                let texture = ctx.load_texture(
-                    format!("ad_{}", i),
-                    color_image,
-                    egui::TextureOptions::LINEAR,
-                );
-                self.ad_textures.push(texture);
+                self.log_text.push_str(&format!("[ADS] Loaded {} ad(s)\n", self.ad_textures.len()));
             }
             self.textures_loaded = true;
         }
@@ -391,12 +394,15 @@ impl eframe::App for SubGui {
                                 self.sel = Some(i);
                                 self.show_global_log = false;
                             }
-                        });
 
-                    if let Some(tex) = self.ad_textures.first() {
-                        ui.separator();
-                        ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
-                    }
+                            if let Some(tex) = self.ad_textures.first() {
+                                ui.separator();
+                                ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
+                            } else {
+                                ui.separator();
+                                ui.label("[Ad Placeholder]");
+                            }
+                        });
                 });
             });
 
