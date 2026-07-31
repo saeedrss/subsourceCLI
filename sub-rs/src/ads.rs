@@ -1,5 +1,4 @@
-use image::RgbaImage;
-use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct AdData {
@@ -8,27 +7,15 @@ pub struct AdData {
     pub height: u32,
 }
 
-fn generate_placeholder(w: u32, h: u32) -> AdData {
-    let mut rgba = Vec::with_capacity((w * h * 4) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let r = ((x as f32 / w as f32) * 200.0) as u8 + 55;
-            let g = ((y as f32 / h as f32) * 200.0) as u8 + 55;
-            let b = 100;
-            rgba.extend_from_slice(&[r, g, b, 255]);
-        }
-    }
-    AdData { rgba, width: w, height: h }
+fn get_ads_dir() -> PathBuf {
+    let base = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    base.join("subsource").join("ads")
 }
 
-fn get_ads_dir() -> std::path::PathBuf {
-    let exe = std::env::current_exe().ok();
-    if let Some(p) = exe.and_then(|p| p.parent().map(|p| p.join("ads"))) {
-        if p.exists() {
-            return p;
-        }
-    }
-    std::path::PathBuf::from("ads")
+pub fn ensure_ads_dir() -> PathBuf {
+    let dir = get_ads_dir();
+    std::fs::create_dir_all(&dir).ok();
+    dir
 }
 
 pub fn load_ads() -> Vec<AdData> {
@@ -56,20 +43,9 @@ pub fn load_ads() -> Vec<AdData> {
         }
     }
 
-    if ads.is_empty() {
-        let placeholder = generate_placeholder(300, 100);
-        let _ = save_placeholder_png(&ads_dir, &placeholder);
-        ads.push(placeholder);
-        ads.push(generate_placeholder(250, 80));
-    }
-
     ads
 }
 
-fn save_placeholder_png(ads_dir: &Path, ad: &AdData) -> Result<(), Box<dyn std::error::Error>> {
-    let img = RgbaImage::from_raw(ad.width, ad.height, ad.rgba.clone())
-        .ok_or("failed to create image")?;
-    std::fs::create_dir_all(ads_dir)?;
-    img.save(ads_dir.join("placeholder.png"))?;
-    Ok(())
+pub fn ads_dir_display() -> String {
+    ensure_ads_dir().display().to_string()
 }
