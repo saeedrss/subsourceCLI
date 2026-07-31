@@ -399,15 +399,14 @@ impl eframe::App for SubGui {
                                 self.sel = Some(i);
                                 self.show_global_log = false;
                             }
+
+                            if let Some(tex) = self.ad_textures.first() {
+                                ui.separator();
+                                ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
+                            }
                         });
                 });
             });
-
-        if let Some(tex) = self.ad_textures.first() {
-            egui::TopBottomPanel::bottom("ad_panel").show(ctx, |ui| {
-                ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
-            });
-        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.show_ad_banner && self.ad_textures.len() > 1 {
