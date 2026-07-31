@@ -53,6 +53,8 @@ pub struct SubGui {
     ad_data: Vec<ads::AdData>,
     ad_textures: Vec<egui::TextureHandle>,
     textures_loaded: bool,
+    ads_signature: String,
+    last_ads_check: f64,
     scan_completed_once: bool,
     show_ad_banner: bool,
     subtitle_lang: String,
@@ -88,6 +90,8 @@ impl SubGui {
             ad_data,
             ad_textures: Vec::new(),
             textures_loaded: false,
+            ads_signature: ads::ads_signature(),
+            last_ads_check: 0.0,
             scan_completed_once: false,
             show_ad_banner: false,
             subtitle_lang: lang.to_string(),
@@ -262,6 +266,16 @@ impl eframe::App for SubGui {
                 }
             }
             self.textures_loaded = true;
+        }
+
+        let now = ctx.input(|i| i.time);
+        if now - self.last_ads_check >= 3.0 {
+            self.last_ads_check = now;
+            let sig = ads::ads_signature();
+            if sig != self.ads_signature {
+                self.ads_signature = sig;
+                self.reload_ads();
+            }
         }
 
 

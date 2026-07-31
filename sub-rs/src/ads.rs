@@ -39,3 +39,29 @@ pub fn load_ads() -> Vec<AdData> {
 
     ads
 }
+
+pub fn ads_signature() -> String {
+    let ads_dir = get_ads_dir();
+    let mut sig = String::new();
+    if ads_dir.exists() {
+        let mut names: Vec<String> = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&ads_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("png") {
+                    let meta = path.metadata().map(|m| m.len()).unwrap_or(0);
+                    names.push(format!(
+                        "{}|{}|",
+                        path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+                        meta
+                    ));
+                }
+            }
+        }
+        names.sort();
+        for n in names {
+            sig.push_str(&n);
+        }
+    }
+    sig
+}
