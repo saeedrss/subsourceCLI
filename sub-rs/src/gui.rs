@@ -53,6 +53,8 @@ pub struct SubGui {
     ad_data: Vec<ads::AdData>,
     ad_textures: Vec<egui::TextureHandle>,
     textures_loaded: bool,
+    ad_index: usize,
+    ad_last_switch: f64,
     scan_completed_once: bool,
     show_ad_banner: bool,
     subtitle_lang: String,
@@ -88,6 +90,8 @@ impl SubGui {
             ad_data,
             ad_textures: Vec::new(),
             textures_loaded: false,
+            ad_index: 0,
+            ad_last_switch: 0.0,
             scan_completed_once: false,
             show_ad_banner: false,
             subtitle_lang: lang.to_string(),
@@ -269,6 +273,12 @@ impl eframe::App for SubGui {
             self.textures_loaded = true;
         }
 
+        let now = ctx.input(|i| i.time);
+        if self.ad_textures.len() > 1 && now - self.ad_last_switch >= 5.0 {
+            self.ad_last_switch = now;
+            self.ad_index = (self.ad_index + 1) % self.ad_textures.len();
+        }
+
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             if self.show_update {
                 if let Some(ref info) = self.update_info.clone() {
@@ -399,7 +409,7 @@ impl eframe::App for SubGui {
                                 self.show_global_log = false;
                             }
 
-                            if let Some(tex) = self.ad_textures.first() {
+                            if let Some(tex) = self.ad_textures.get(self.ad_index % self.ad_textures.len()) {
                                 ui.separator();
                                 ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
                             }
@@ -409,7 +419,8 @@ impl eframe::App for SubGui {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.show_ad_banner && self.ad_textures.len() > 1 {
-                if let Some(tex) = self.ad_textures.get(1) {
+                let banner_tex = self.ad_textures.get((self.ad_index + 1) % self.ad_textures.len());
+                if let Some(tex) = banner_tex {
                     egui::Frame::none()
                         .fill(egui::Color32::from_rgb(20, 20, 40))
                         .show(ui, |ui| {
