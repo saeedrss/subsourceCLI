@@ -260,11 +260,6 @@ impl eframe::App for SubGui {
                     );
                     self.ad_textures.push(texture);
                 }
-                self.log_text.push_str(&format!(
-                    "[ADS] Loaded {} ad(s) from {}\n",
-                    self.ad_textures.len(),
-                    ads::ads_dir_display()
-                ));
             }
             self.textures_loaded = true;
         }
@@ -399,12 +394,11 @@ impl eframe::App for SubGui {
                                 self.sel = Some(i);
                                 self.show_global_log = false;
                             }
-
-                            if let Some(tex) = self.ad_textures.first() {
-                                ui.separator();
-                                ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
-                            }
                         });
+                    if let Some(tex) = self.ad_textures.first() {
+                        ui.separator();
+                        ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
+                    }
                 });
             });
 

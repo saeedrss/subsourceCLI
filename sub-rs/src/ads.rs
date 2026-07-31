@@ -12,12 +12,6 @@ fn get_ads_dir() -> PathBuf {
     base.join("subsource").join("ads")
 }
 
-pub fn ensure_ads_dir() -> PathBuf {
-    let dir = get_ads_dir();
-    std::fs::create_dir_all(&dir).ok();
-    dir
-}
-
 pub fn load_ads() -> Vec<AdData> {
     let ads_dir = get_ads_dir();
     let mut ads: Vec<AdData> = Vec::new();
@@ -44,8 +38,4 @@ pub fn load_ads() -> Vec<AdData> {
     }
 
     ads
-}
-
-pub fn ads_dir_display() -> String {
-    ensure_ads_dir().display().to_string()
 }
