@@ -372,6 +372,13 @@ impl eframe::App for SubGui {
                         self.sel = None;
                     }
 
+                    if let Some(tex) = self.ad_textures.first() {
+                        egui::TopBottomPanel::bottom("ad_panel").show_inside(ui, |ui| {
+                            ui.separator();
+                            ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
+                        });
+                    }
+
                     egui::ScrollArea::vertical()
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
@@ -395,10 +402,6 @@ impl eframe::App for SubGui {
                                 self.show_global_log = false;
                             }
                         });
-                    if let Some(tex) = self.ad_textures.first() {
-                        ui.separator();
-                        ui.add(egui::Image::new(tex).fit_to_exact_size(egui::vec2(250.0, 80.0)));
-                    }
                 });
             });
 
