@@ -17,6 +17,7 @@ enum GuiEvent {
     SetStats(String),
     ScanDone,
     UpdateResult(Option<updater::UpdateInfo>),
+    AdsLoaded(Vec<ads::AdData>),
 }
 
 struct FileRow {
@@ -53,17 +54,21 @@ pub struct SubGui {
     ad_data: Vec<ads::AdData>,
     ad_textures: Vec<egui::TextureHandle>,
     textures_loaded: bool,
-    ads_signature: String,
-    last_ads_check: f64,
     scan_completed_once: bool,
     show_ad_banner: bool,
     subtitle_lang: String,
 }
 
 impl SubGui {
-    pub fn new(api_key: Option<String>, proxy: Option<String>, lang: &str, update: Option<updater::UpdateInfo>, ad_data: Vec<ads::AdData>) -> Self {
+    pub fn new(api_key: Option<String>, proxy: Option<String>, lang: &str, update: Option<updater::UpdateInfo>) -> Self {
         let (tx, rx) = mpsc::channel();
         let show_update = update.is_some();
+        let fetch_tx = tx.clone();
+        let fetch_proxy = proxy.clone();
+        std::thread::spawn(move || {
+            let ads = ads::fetch_ads(fetch_proxy.as_deref());
+            fetch_tx.send(GuiEvent::AdsLoaded(ads)).ok();
+        });
         SubGui {
             directory: String::new(),
             top_n: 5,
@@ -87,11 +92,9 @@ impl SubGui {
             update_info: update,
             prev_proxy: String::new(),
             prev_proxy_enabled: false,
-            ad_data,
+            ad_data: Vec::new(),
             ad_textures: Vec::new(),
             textures_loaded: false,
-            ads_signature: ads::ads_signature(),
-            last_ads_check: 0.0,
             scan_completed_once: false,
             show_ad_banner: false,
             subtitle_lang: lang.to_string(),
@@ -187,9 +190,17 @@ impl SubGui {
         self.scanning = true;
     }
 
-    fn reload_ads(&mut self) {
-        self.ad_data = ads::load_ads();
-        self.textures_loaded = false;
+    fn reload_ads(&self) {
+        let tx = self.tx.clone();
+        let proxy = if self.proxy_enabled && !self.proxy.is_empty() {
+            Some(self.proxy.clone())
+        } else {
+            None
+        };
+        std::thread::spawn(move || {
+            let ads = ads::fetch_ads(proxy.as_deref());
+            tx.send(GuiEvent::AdsLoaded(ads)).ok();
+        });
     }
 
     fn recheck_update(&self) {
@@ -244,6 +255,10 @@ impl eframe::App for SubGui {
                     self.update_info = info;
                     self.show_update = self.update_info.is_some();
                 }
+                GuiEvent::AdsLoaded(ads) => {
+                    self.ad_data = ads;
+                    self.textures_loaded = false;
+                }
             }
             ctx.request_repaint();
         }
@@ -266,16 +281,6 @@ impl eframe::App for SubGui {
                 }
             }
             self.textures_loaded = true;
-        }
-
-        let now = ctx.input(|i| i.time);
-        if now - self.last_ads_check >= 3.0 {
-            self.last_ads_check = now;
-            let sig = ads::ads_signature();
-            if sig != self.ads_signature {
-                self.ads_signature = sig;
-                self.reload_ads();
-            }
         }
 
 

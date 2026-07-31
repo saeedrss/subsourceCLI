@@ -145,8 +145,7 @@ fn main() -> Result<()> {
             ..Default::default()
         };
 
-        let ad_data = ads::load_ads();
-        let app = gui::SubGui::new(api_key, proxy, &cli.lang, update, ad_data);
+        let app = gui::SubGui::new(api_key, proxy, &cli.lang, update);
         eframe::run_native(
             "SubSource Subtitle Downloader",
             options,
