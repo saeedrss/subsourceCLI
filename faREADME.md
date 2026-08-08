@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.svg" width="160" alt="آیکون SubSource"/>
+</p>
+
 # دانلودر زیرنویس SubSource
 
 دانلود زیرنویس برای فایل‌های ویدیویی از طریق API

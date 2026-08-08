@@ -35,6 +35,9 @@ struct Cli {
     #[arg(long)]
     skip_existing: bool,
 
+    #[arg(long, help = "Save subtitle as <video>.srt without the language suffix (e.g. movie.srt instead of movie.fa.srt)")]
+    no_lang_suffix: bool,
+
     #[arg(long)]
     gui: bool,
 }
@@ -97,6 +100,7 @@ fn run_cli(cli: &Cli) -> Result<()> {
         cli.dry_run,
         &cli.lang,
         cli.skip_existing,
+        cli.no_lang_suffix,
         &|msg| print!("{}", msg),
     )?;
 
@@ -138,10 +142,15 @@ fn main() -> Result<()> {
 
         let api_key = cli.api_key.or(env_key);
 
+        let mut viewport = eframe::egui::ViewportBuilder::default()
+            .with_inner_size([1200.0, 800.0])
+            .with_resizable(true);
+        if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")) {
+            viewport = viewport.with_icon(icon);
+        }
+
         let options = eframe::NativeOptions {
-            viewport: eframe::egui::ViewportBuilder::default()
-                .with_inner_size([1200.0, 800.0])
-                .with_resizable(true),
+            viewport,
             ..Default::default()
         };
 

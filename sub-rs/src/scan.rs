@@ -250,6 +250,7 @@ pub fn process_video(
     dry_run: bool,
     lang: &str,
     skip_existing: bool,
+    no_lang_suffix: bool,
     log: &dyn Fn(&str),
 ) -> Result<bool> {
     log(&format!(
@@ -259,9 +260,10 @@ pub fn process_video(
 
     let base_name = video_path.file_stem().unwrap_or_default().to_string_lossy().to_string();
     let parent_dir = video_path.parent().unwrap();
-    let best_path = parent_dir.join(format!("{}.{}.srt", base_name, lang));
+    let best_path = parent_dir.join(subtitle_name(&base_name, lang, no_lang_suffix, "srt"));
+    let legacy_path = parent_dir.join(subtitle_name(&base_name, lang, !no_lang_suffix, "srt"));
 
-    if skip_existing && best_path.exists() {
+    if skip_existing && (best_path.exists() || legacy_path.exists()) {
         log(&format!("  [SKIP] Subtitle already exists: {}\n", best_path.file_name().unwrap().to_string_lossy()));
         return Ok(true);
     }
@@ -278,11 +280,13 @@ pub fn process_video(
     let sub_dir = parent_dir.join("sub");
     std::fs::create_dir_all(&sub_dir)?;
 
-    let best_path = parent_dir.join(format!("{}.{}.srt", base_name, lang));
-    if best_path.exists() {
+    let best_path = parent_dir.join(subtitle_name(&base_name, lang, no_lang_suffix, "srt"));
+    let legacy_path = parent_dir.join(subtitle_name(&base_name, lang, !no_lang_suffix, "srt"));
+    if best_path.exists() || legacy_path.exists() {
+        let existing_path = if best_path.exists() { &best_path } else { &legacy_path };
         log(&format!(
             "  [INFO] Best subtitle already extracted: {}\n",
-            best_path.file_name().unwrap().to_string_lossy()
+            existing_path.file_name().unwrap().to_string_lossy()
         ));
         let existing = std::fs::read_dir(&sub_dir)
             .into_iter()
@@ -445,9 +449,9 @@ pub fn process_video(
 
         if zip_path.exists() {
             log(&format!("         [INFO] Already exists: {}\n", zip_name));
-            if is_best && !best_path.exists() {
+            if is_best && !best_path.exists() && !legacy_path.exists() {
                 log("         [EXTRACT] Extracting existing best match...\n");
-                if extract_and_rename_best(&zip_path, video_path, &file_info, lang, log).unwrap_or(false) {
+                if extract_and_rename_best(&zip_path, video_path, &file_info, lang, no_lang_suffix, log).unwrap_or(false) {
                     extracted = true;
                 }
             }
@@ -460,7 +464,7 @@ pub fn process_video(
                 log(&format!("         [SUCCESS] Saved: {}\n", zip_name));
                 if is_best {
                     log("         [EXTRACT] Extracting best match...\n");
-                    if extract_and_rename_best(&zip_path, video_path, &file_info, lang, log)
+                    if extract_and_rename_best(&zip_path, video_path, &file_info, lang, no_lang_suffix, log)
                         .unwrap_or(false)
                     {
                         extracted = true;
@@ -480,11 +484,20 @@ pub fn process_video(
     }
 }
 
+fn subtitle_name(base: &str, lang: &str, no_lang_suffix: bool, ext: &str) -> String {
+    if no_lang_suffix {
+        format!("{}.{}", base, ext)
+    } else {
+        format!("{}.{}.{}", base, lang, ext)
+    }
+}
+
 pub fn extract_and_rename_best(
     zip_path: &Path,
     video_path: &Path,
     file_info: &FileInfo,
     lang: &str,
+    no_lang_suffix: bool,
     log: &dyn Fn(&str),
 ) -> Result<bool> {
     let stem = video_path.file_stem().unwrap_or_default().to_string_lossy();
@@ -525,8 +538,8 @@ pub fn extract_and_rename_best(
     let result = if sub_indices.len() == 1 {
         let name = archive.by_index(sub_indices[0]).unwrap().name().to_string();
         let src = extract_dir.join(&name);
-        let suffix = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-        let dst = parent.join(format!("{}.{}{}", stem, lang, suffix));
+        let ext = src.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_else(|| "srt".to_string());
+        let dst = parent.join(subtitle_name(&stem, lang, no_lang_suffix, &ext));
         if dst.exists() {
             std::fs::rename(&dst, dst.with_extension("srt.backup"))?;
         }
@@ -591,8 +604,8 @@ pub fn extract_and_rename_best(
     } else {
         let name = archive.by_index(sub_indices[0]).unwrap().name().to_string();
         let src = extract_dir.join(&name);
-        let suffix = src.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-        let dst = parent.join(format!("{}.{}{}", stem, lang, suffix));
+        let ext = src.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_else(|| "srt".to_string());
+        let dst = parent.join(subtitle_name(&stem, lang, no_lang_suffix, &ext));
         if dst.exists() {
             std::fs::rename(&dst, dst.with_extension("srt.backup"))?;
         }
@@ -616,14 +629,21 @@ pub fn scan_directory(
     dry_run: bool,
     lang: &str,
     skip_existing: bool,
+    no_lang_suffix: bool,
     log: &dyn Fn(&str),
 ) -> Result<Stats> {
     let mut stats = Stats::new();
 
+    let out_name = if no_lang_suffix {
+        "movie.srt".to_string()
+    } else {
+        format!("movie.{}.srt", lang)
+    };
     log(&format!(
-        "\n{}\n[SEARCH] Scanning: {}\n   Mode: Extract best .fa.srt + keep top {} ZIPs in sub\\\n{}\n",
+        "\n{}\n[SEARCH] Scanning: {}\n   Mode: Extract best {} + keep top {} ZIPs in sub\\\n{}\n",
         "=".repeat(70),
         dir.display(),
+        out_name,
         top_n,
         "=".repeat(70)
     ));
@@ -632,7 +652,7 @@ pub fn scan_directory(
     log(&format!("Found {} video file(s)\n", videos.len()));
 
     for video in &videos {
-        match process_video(video, client, top_n, dry_run, lang, skip_existing, log) {
+        match process_video(video, client, top_n, dry_run, lang, skip_existing, no_lang_suffix, log) {
             Ok(true) => {
                 stats.found += 1;
                 stats.downloaded += 1;

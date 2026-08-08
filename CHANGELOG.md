@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.3] - 2026-08-08
+
+### Added
+- `--no-lang-suffix` flag (CLI) and "No Lang Suffix" checkbox (GUI): save the
+  best match as `movie.srt` instead of `movie.fa.srt` for any language
+
+### Fixed
+- `--skip-existing` now skips a video when either `movie.srt` or
+  `movie.{lang}.srt` already exists, regardless of suffix mode
+
 ## [1.1.2] - 2026-07-29
 
 ### Added

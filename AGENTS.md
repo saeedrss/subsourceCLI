@@ -28,6 +28,8 @@ No test runner, formatter, linter, or CI is configured outside of GitHub Actions
 | `--dry-run` | — | Log what would happen without downloading |
 | `--no-recursive` | — | Only scan directory root |
 | `--proxy` | `None` | Proxy URL (e.g. `http://127.0.0.1:8080`) |
+| `--skip-existing` | — | Skip videos that already have a subtitle |
+| `--no-lang-suffix` | — | Save as `movie.srt` instead of `movie.{lang}.srt` |
 | `--gui` | — | Launch egui desktop GUI |
 
 Run `./target/release/sub-rs --help` for all options.
@@ -40,11 +42,13 @@ Run `./target/release/sub-rs --help` for all options.
 - **Output layout** in the target directory:
   ```
   video.mkv
-  video.fa.srt          ← best match (extracted and renamed)
+  video.fa.srt          ← best match (extracted and renamed; or video.srt with --no-lang-suffix)
   sub/
     video_sub1_*.zip    ← best match (ZIP backup)
     video_sub2_*.zip    ← alternatives (up to `--top`)
   ```
+- **Skip-existing** (`--skip-existing`): skips a video when either
+  `video.srt` or `video.{lang}.srt` already exists.
 - **Episode matching**: supports `S01E01` style parsing, season filtering, and
   episode-level selection from multi-file ZIPs.
 - **Rate limiting**: 1-second delay (`REQUEST_DELAY`) between API calls, built

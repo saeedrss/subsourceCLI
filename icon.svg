@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1597a0"/>
+      <stop offset="0.55" stop-color="#08727d"/>
+      <stop offset="1" stop-color="#063e50"/>
+    </linearGradient>
+    <linearGradient id="bubble" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#1aaab1"/>
+      <stop offset="1" stop-color="#087080"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#9bea58"/>
+      <stop offset="0.45" stop-color="#4eaf35"/>
+      <stop offset="1" stop-color="#187328"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-opacity=".28"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="7" stdDeviation="6" flood-opacity=".32"/>
+    </filter>
+  </defs>
+
+  <!-- App tile -->
+  <rect x="40" y="40" width="944" height="944" rx="190" fill="url(#bg)" filter="url(#shadow)"/>
+
+  <!-- Inner speech/document panel -->
+  <path d="M235 220
+           Q235 150 305 150
+           H760 Q830 150 830 220
+           V690 Q830 760 760 760
+           H535 L405 875 Q380 897 380 855 V760
+           H305 Q235 760 235 690 Z"
+        fill="url(#bubble)" filter="url(#soft)"/>
+
+  <!-- Text/message bars -->
+  <g fill="#fff" filter="url(#soft)">
+    <rect x="300" y="255" width="340" height="48" rx="24"/>
+    <rect x="665" y="255" width="135" height="48" rx="24"/>
+    <rect x="300" y="350" width="185" height="48" rx="24"/>
+    <rect x="520" y="350" width="280" height="48" rx="24"/>
+    <rect x="300" y="445" width="390" height="48" rx="24"/>
+    <rect x="300" y="540" width="310" height="48" rx="24"/>
+  </g>
+
+  <!-- Download arrow -->
+  <g filter="url(#shadow)">
+    <path d="M650 470
+             H755 V665
+             H860
+             L710 835
+             L560 665
+             H665
+             V470 Z"
+          fill="#145c28" opacity=".55" transform="translate(10 13)"/>
+    <path d="M650 450
+             H755 V645
+             H860
+             L710 815
+             L560 645
+             H665
+             V450 Z"
+          fill="url(#arrow)" stroke="#2b762b" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M662 463 H743 V655 H820"
+          fill="none" stroke="#d2ffad" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity=".75"/>
+    <path d="M579 655 L710 795 L841 655"
+          fill="none" stroke="#b8f58e" stroke-width="6" opacity=".65"/>
+  </g>
+</svg>
