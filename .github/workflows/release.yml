@@ -56,7 +56,7 @@ jobs:
         run: |
           cd sub-rs/target/${{ matrix.target }}/release
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            tar -a -cf sub-rs-${{ matrix.name }}.zip sub-rs-${{ matrix.name }}.exe
+            powershell -NoProfile -Command "Compress-Archive -Path 'sub-rs-${{ matrix.name }}.exe' -DestinationPath 'sub-rs-${{ matrix.name }}.zip' -CompressionLevel Optimal"
           else
             tar -czf sub-rs-${{ matrix.name }}.tar.gz sub-rs-${{ matrix.name }}
           fi
@@ -77,7 +77,7 @@ jobs:
           path: artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: artifacts/*/*
           generate_release_notes: true
