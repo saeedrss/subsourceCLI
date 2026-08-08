@@ -79,7 +79,7 @@ impl SubGui {
             recursive: true,
             api_key: api_key.unwrap_or_default(),
             proxy: proxy.as_deref().unwrap_or("").to_string(),
-            proxy_enabled: proxy.is_some() && proxy.as_deref().unwrap_or("") != "",
+            proxy_enabled: false,
             files: Vec::new(),
             log_text: String::new(),
             stats_text: String::new(),
