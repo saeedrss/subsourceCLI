@@ -51,6 +51,16 @@ jobs:
             mv sub-rs sub-rs-${{ matrix.name }}
           fi
 
+      - name: Create archive
+        shell: bash
+        run: |
+          cd sub-rs/target/${{ matrix.target }}/release
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            tar -a -cf sub-rs-${{ matrix.name }}.zip sub-rs-${{ matrix.name }}.exe
+          else
+            tar -czf sub-rs-${{ matrix.name }}.tar.gz sub-rs-${{ matrix.name }}
+          fi
+
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
@@ -71,3 +81,4 @@ jobs:
         with:
           files: artifacts/*/*
           generate_release_notes: true
+          update_release: true
