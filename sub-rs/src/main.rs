@@ -1,4 +1,5 @@
 mod ads;
+mod clean;
 mod client;
 mod gui;
 mod scan;
@@ -7,6 +8,8 @@ mod updater;
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use std::path::PathBuf;
+
+const DEFAULT_API_KEY: &str = "sk_f4963b83a6e4f6d5966c2d0fd31aa2b4b6e646e940142db2e04321e56e3881a6";
 
 #[derive(Parser)]
 #[command(name = "sub-rs", about = "Download subtitles via SubSource API")]
@@ -37,6 +40,9 @@ struct Cli {
 
     #[arg(long, help = "Save subtitle as <video>.srt without the language suffix (e.g. movie.srt instead of movie.fa.srt)")]
     no_lang_suffix: bool,
+
+    #[arg(long, help = "Remove ad cues and brand watermarks from Farsi (.fa) subtitles after extraction")]
+    clean_ads: bool,
 
     #[arg(long)]
     gui: bool,
@@ -83,7 +89,7 @@ fn run_cli(cli: &Cli) -> Result<()> {
         .api_key
         .clone()
         .or(env_key)
-        .ok_or_else(|| anyhow!("API key required. Use --api-key, SUBSOURCE_API_KEY env, or config file."))?;
+        .unwrap_or_else(|| DEFAULT_API_KEY.to_string());
     let proxy = cli.proxy.clone().or(file_proxy);
 
     let client = client::Client::new(api_key.clone(), proxy.clone())?;
@@ -101,6 +107,7 @@ fn run_cli(cli: &Cli) -> Result<()> {
         &cli.lang,
         cli.skip_existing,
         cli.no_lang_suffix,
+        cli.clean_ads,
         &|msg| print!("{}", msg),
     )?;
 
@@ -140,7 +147,7 @@ fn main() -> Result<()> {
         #[cfg(windows)]
         hide_console();
 
-        let api_key = cli.api_key.or(env_key);
+        let api_key = cli.api_key.or(env_key).or(Some(DEFAULT_API_KEY.to_string()));
 
         let mut viewport = eframe::egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
@@ -158,7 +165,10 @@ fn main() -> Result<()> {
         eframe::run_native(
             "SubSource Subtitle Downloader",
             options,
-            Box::new(|_cc| Ok(Box::new(app))),
+            Box::new(|cc| {
+                gui::install_fonts(&cc.egui_ctx);
+                Ok(Box::new(app))
+            }),
         )
         .ok();
         Ok(())

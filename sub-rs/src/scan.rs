@@ -243,6 +243,11 @@ fn score_subtitle(sub: &SubtitleEntry) -> (f64, i32) {
     (good as f64 / total as f64, sub.downloads.unwrap_or(0))
 }
 
+pub struct ProcessOutcome {
+    pub downloaded: usize,
+    pub available: usize,
+}
+
 pub fn process_video(
     video_path: &Path,
     client: &Client,
@@ -251,8 +256,9 @@ pub fn process_video(
     lang: &str,
     skip_existing: bool,
     no_lang_suffix: bool,
+    clean_ads: bool,
     log: &dyn Fn(&str),
-) -> Result<bool> {
+) -> Result<Option<ProcessOutcome>> {
     log(&format!(
         "\n[FILE] Processing: {}\n",
         video_path.file_name().unwrap_or_default().to_string_lossy()
@@ -265,7 +271,7 @@ pub fn process_video(
 
     if skip_existing && (best_path.exists() || legacy_path.exists()) {
         log(&format!("  [SKIP] Subtitle already exists: {}\n", best_path.file_name().unwrap().to_string_lossy()));
-        return Ok(true);
+        return Ok(Some(ProcessOutcome { downloaded: 0, available: 0 }));
     }
 
     let file_info =
@@ -300,7 +306,7 @@ pub fn process_video(
             .count();
         if existing >= top_n {
             log("  [INFO] Backup ZIPs also present\n");
-            return Ok(true);
+            return Ok(Some(ProcessOutcome { downloaded: existing as usize, available: top_n }));
         }
     }
 
@@ -319,7 +325,7 @@ pub fn process_video(
 
     if results.is_empty() {
         log("  [ERROR] No search results\n");
-        return Ok(false);
+        return Ok(None);
     }
     log(&format!("  [COUNT] API returned {} result(s)\n", results.len()));
 
@@ -344,7 +350,7 @@ pub fn process_video(
         Some(s) => s,
         None => {
             log(&format!("  [ERROR] No '{}' subtitles found\n", lang));
-            return Ok(false);
+            return Ok(None);
         }
     };
 
@@ -395,7 +401,7 @@ pub fn process_video(
 
     if filtered.is_empty() {
         log("  [ERROR] No matching subtitles after filtering\n");
-        return Ok(false);
+        return Ok(None);
     }
 
     let mut sorted: Vec<&&SubtitleEntry> = filtered.iter().collect();
@@ -407,6 +413,9 @@ pub fn process_video(
     let top_subs: Vec<&&SubtitleEntry> = sorted.into_iter().take(top_n).collect();
 
     let mut extracted = false;
+    let mut downloaded = 0usize;
+    let available = top_subs.len();
+    let mut saved_zips: Vec<PathBuf> = Vec::new();
     for (i, sub) in top_subs.iter().enumerate() {
         let sub_id_str = match sub.subtitle_id {
             Some(id) => id.to_string(),
@@ -444,14 +453,18 @@ pub fn process_video(
         if dry_run {
             log(&format!("         [DRYRUN] Would save: sub\\{}\n", zip_name));
             extracted = true;
+            downloaded += 1;
             continue;
         }
 
         if zip_path.exists() {
             log(&format!("         [INFO] Already exists: {}\n", zip_name));
+            downloaded += 1;
+            saved_zips.push(zip_path.clone());
             if is_best && !best_path.exists() && !legacy_path.exists() {
                 log("         [EXTRACT] Extracting existing best match...\n");
-                if extract_and_rename_best(&zip_path, video_path, &file_info, lang, no_lang_suffix, log).unwrap_or(false) {
+                if extract_and_rename_best(&zip_path, video_path, &file_info, lang, no_lang_suffix, clean_ads, log)
+                    .unwrap_or(false) {
                     extracted = true;
                 }
             }
@@ -462,9 +475,11 @@ pub fn process_video(
         match client.download_zip(&sub_id_str, &zip_path) {
             Ok(()) => {
                 log(&format!("         [SUCCESS] Saved: {}\n", zip_name));
+                downloaded += 1;
+                saved_zips.push(zip_path.clone());
                 if is_best {
                     log("         [EXTRACT] Extracting best match...\n");
-                    if extract_and_rename_best(&zip_path, video_path, &file_info, lang, no_lang_suffix, log)
+                    if extract_and_rename_best(&zip_path, video_path, &file_info, lang, no_lang_suffix, clean_ads, log)
                         .unwrap_or(false)
                     {
                         extracted = true;
@@ -475,12 +490,24 @@ pub fn process_video(
         }
     }
 
-    if extracted || dry_run {
-        log("\n  [SUCCESS] Processed\n");
-        Ok(true)
+    if !extracted && !dry_run {
+        log("  [INFO] Best match unavailable; extracting best available backup...\n");
+        for zip in &saved_zips {
+            if extract_and_rename_best(zip, video_path, &file_info, lang, no_lang_suffix, clean_ads, log)
+                .unwrap_or(false)
+            {
+                extracted = true;
+                break;
+            }
+        }
+    }
+
+    if extracted || dry_run || downloaded > 0 {
+        log(&format!("\n  [SUCCESS] Processed ({} of {} subtitle(s))\n", downloaded, available));
+        Ok(Some(ProcessOutcome { downloaded, available }))
     } else {
         log("\n  [ERROR] Failed to download any subtitles\n");
-        Ok(false)
+        Ok(None)
     }
 }
 
@@ -498,11 +525,26 @@ pub fn extract_and_rename_best(
     file_info: &FileInfo,
     lang: &str,
     no_lang_suffix: bool,
+    clean_ads: bool,
     log: &dyn Fn(&str),
 ) -> Result<bool> {
     let stem = video_path.file_stem().unwrap_or_default().to_string_lossy();
     let extract_dir = video_path.parent().unwrap().join(format!("_temp_subs_{}", stem));
     let parent = video_path.parent().unwrap();
+
+    fn clean_extracted(dst: &Path, lang: &str, clean_ads: bool, log: &dyn Fn(&str)) {
+        if !clean_ads || lang != "fa" {
+            return;
+        }
+        if let Ok(counts) = crate::clean::clean_srt_file(dst) {
+            if counts.ads_removed > 0 || counts.brand_lines > 0 {
+                log(&format!(
+                    "    [CLEAN] Removed {} ad line(s), {} brand line(s)\n",
+                    counts.ads_removed, counts.brand_lines
+                ));
+            }
+        }
+    }
 
     let file = std::fs::File::open(zip_path)?;
     let mut archive = ZipArchive::new(file)?;
@@ -548,6 +590,7 @@ pub fn extract_and_rename_best(
             "    [OK] Extracted and renamed to: {}\n",
             dst.file_name().unwrap().to_string_lossy()
         ));
+        clean_extracted(&dst, lang, clean_ads, log);
         true
     } else if let Some(ref ep) = file_info.episode {
         let target_ep = ep.parse::<u32>().unwrap_or(0);
@@ -579,6 +622,7 @@ pub fn extract_and_rename_best(
                     target_ep,
                     dst.file_name().unwrap().to_string_lossy()
                 ));
+                clean_extracted(&dst, lang, clean_ads, log);
                 true
             }
             None => {
@@ -614,6 +658,7 @@ pub fn extract_and_rename_best(
             "    [OK] Extracted first file: {}\n",
             dst.file_name().unwrap().to_string_lossy()
         ));
+        clean_extracted(&dst, lang, clean_ads, log);
         true
     };
 
@@ -630,6 +675,7 @@ pub fn scan_directory(
     lang: &str,
     skip_existing: bool,
     no_lang_suffix: bool,
+    clean_ads: bool,
     log: &dyn Fn(&str),
 ) -> Result<Stats> {
     let mut stats = Stats::new();
@@ -652,12 +698,12 @@ pub fn scan_directory(
     log(&format!("Found {} video file(s)\n", videos.len()));
 
     for video in &videos {
-        match process_video(video, client, top_n, dry_run, lang, skip_existing, no_lang_suffix, log) {
-            Ok(true) => {
+        match process_video(video, client, top_n, dry_run, lang, skip_existing, no_lang_suffix, clean_ads, log) {
+            Ok(Some(o)) => {
                 stats.found += 1;
-                stats.downloaded += 1;
+                stats.downloaded += o.downloaded as u32;
             }
-            Ok(false) => stats.errors += 1,
+            Ok(None) => stats.errors += 1,
             Err(e) => {
                 log(&format!("  [ERROR] {}\n", e));
                 stats.errors += 1;

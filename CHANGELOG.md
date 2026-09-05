@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.1.4] - 2026-09-05
+
+### Added
+- Farsi ad & brand cleanup: deletes whole subtitle lines whose text matches
+  known ad frames (digimoviez, دیجی موویز, EBTV, ...) or brand frames
+  (امپایربست / empire best tv). Enabled via `--clean-ads` (CLI) or the
+  "Remove Farsi ads" checkbox (GUI). Applies to `fa` subtitles only
+- GUI: Persian font (Vazirmatn) embedded so Farsi text renders instead of
+  empty boxes
+- Built-in API key fallback used when `--api-key`, the `SUBSOURCE_API_KEY`
+  env var, and the config file are all absent
+
+### Changed
+- Partial success: a video is considered done when at least one subtitle was
+  downloaded, extracted from a saved backup, or already present — the GUI now
+  shows `done X/Y` and stats count actual downloads
+
+### Fixed
+- When the best match download fails, the best available saved backup ZIP is
+  now extracted as a fallback instead of failing the whole file
+
 ## [1.1.3] - 2026-08-08
 
 ### Added

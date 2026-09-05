@@ -14,6 +14,8 @@ top-N ZIP backups kept in `sub/`. Supports **19 languages**.
 
 </div>
 
+<img src="sub-rs/assets/gui.png" alt="sub-rs GUI screenshot" width="900"/>
+
 ## 🖥️ Rust GUI (primary)
 
 A single, cross-platform desktop app (Windows / macOS / Linux) built with egui —
@@ -32,6 +34,8 @@ no Python or runtime needed. Just download the binary and run it:
 - 🔀 **Language toggle** — switch the interface between **English / فارسی**
 - 🔧 **Proxy** — enable/disable checkbox with live reload
 - 🧪 **Dry Run** — test without downloading anything
+- 🧹 **Remove Farsi ads** — strips ad & brand lines from `fa` subtitles
+- ✍️ **Persian font** — Vazirmatn embedded, Farsi renders correctly in the GUI
 - 📋 **Live logs** — per-file detail log + global log streamed in real time
 - 🔔 **Update checker** — notifies when a new release is available
 
@@ -62,15 +66,16 @@ cargo build --release
 | `-d, --directory` | `.` | Directory to scan for video files |
 | `--top` | `5` | Number of subtitle candidates to keep |
 | `-l, --lang` | `fa` | Subtitle language code (`fa`, `en`, `ar`, ...) |
-| `--api-key` | `SUBSOURCE_API_KEY` env or config file | API key (no hardcoded fallback) |
+| `--api-key` | `SUBSOURCE_API_KEY` env or config file (built-in fallback) | API key |
 | `--dry-run` | — | Log actions without downloading |
 | `--no-recursive` | — | Only scan directory root |
 | `--proxy` | `None` | Proxy URL (e.g. `http://127.0.0.1:8080`) |
 | `--skip-existing` | — | Skip videos that already have a subtitle |
 | `--no-lang-suffix` | — | Save as `movie.srt` without the language suffix |
+| `--clean-ads` | — | Strip Farsi ad & brand lines from downloaded `fa` subtitles |
 | `--gui` | — | Launch GUI instead of CLI |
 
-API key resolution: `--api-key` > `SUBSOURCE_API_KEY` env var > `~/.config/subsource/config.json`.
+API key resolution: `--api-key` > `SUBSOURCE_API_KEY` env var > `~/.config/subsource/config.json` > built-in fallback.
 
 ## 📁 Output layout
 
@@ -91,6 +96,8 @@ sub/
 - Falls back to folder name when the filename has no recognizable title
 - 19 subtitle languages, English/Farsi interface
 - Skip-existing detects both `movie.srt` and `movie.{lang}.srt`
+- Partial success: a video counts as done when at least one subtitle is downloaded
+  (or extracted from a saved backup / already present) — e.g. `✅ done 2/3`
 - 1-second rate limiting between API calls
 - Update checker with release notes
 

@@ -8,6 +8,21 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
+pub fn install_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "vazirmatn".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/Vazirmatn-Regular.ttf")).into(),
+    );
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        let list = fonts.families.entry(family).or_default();
+        if !list.iter().any(|f| f == "vazirmatn") {
+            list.push("vazirmatn".to_owned());
+        }
+    }
+    ctx.set_fonts(fonts);
+}
+
 #[derive(Clone)]
 enum GuiEvent {
     Log(String),
@@ -38,6 +53,7 @@ pub struct SubGui {
     api_key: String,
     proxy: String,
     proxy_enabled: bool,
+    clean_ads: bool,
     files: Vec<FileRow>,
     log_text: String,
     stats_text: String,
@@ -80,6 +96,7 @@ impl SubGui {
             api_key: api_key.unwrap_or_default(),
             proxy: proxy.as_deref().unwrap_or("").to_string(),
             proxy_enabled: false,
+            clean_ads: false,
             files: Vec::new(),
             log_text: String::new(),
             stats_text: String::new(),
@@ -117,6 +134,7 @@ impl SubGui {
         let recursive = self.recursive;
         let skip_existing = self.skip_existing;
         let no_lang_suffix = self.no_lang_suffix;
+        let clean_ads = self.clean_ads;
         let dir = PathBuf::from(&self.directory);
         let tx = self.tx.clone();
         let lang = self.subtitle_lang.clone();
@@ -155,19 +173,20 @@ impl SubGui {
                 let tx2 = tx.clone();
                 let tx3 = tx.clone();
                 let video_log: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
-                let result = scan::process_video(video, &client, top_n, dry_run, &lang, skip_existing, no_lang_suffix, &|msg| {
+                let result = scan::process_video(video, &client, top_n, dry_run, &lang, skip_existing, no_lang_suffix, clean_ads, &|msg| {
                     video_log.borrow_mut().push_str(msg);
                     tx2.send(GuiEvent::Log(msg.to_string())).ok();
                     tx3.send(GuiEvent::FileDetail(idx, video_log.borrow().clone())).ok();
                 });
 
                 match result {
-                    Ok(true) => {
+                    Ok(Some(outcome)) => {
                         stats.found += 1;
-                        stats.downloaded += 1;
-                        tx.send(GuiEvent::FileUpdated(idx, "✅".to_string(), "Done".to_string())).ok();
+                        stats.downloaded += outcome.downloaded as u32;
+                        let status = format!("done {}/{}", outcome.downloaded, outcome.available);
+                        tx.send(GuiEvent::FileUpdated(idx, "✅".to_string(), status)).ok();
                     }
-                    Ok(false) => {
+                    Ok(None) => {
                         stats.errors += 1;
                         tx.send(GuiEvent::FileUpdated(idx, "❌".to_string(), "Failed".to_string())).ok();
                     }
@@ -354,7 +373,8 @@ impl eframe::App for SubGui {
                 ui.label(if self.lang_fa { "API Key:" } else { "API Key:" });
                 ui.add(egui::TextEdit::singleline(&mut self.api_key).password(true).hint_text("sk_..."));
                 ui.checkbox(&mut self.proxy_enabled, if self.lang_fa { "پروکسی" } else { "Proxy" });
-                ui.add_enabled(self.proxy_enabled, egui::TextEdit::singleline(&mut self.proxy).hint_text("http://..."));
+                ui.add_enabled(self.proxy_enabled, egui::TextEdit::singleline(&mut self.proxy).hint_text("http://ip:port / socks5://ip:port"));
+                ui.checkbox(&mut self.clean_ads, if self.lang_fa { "حذف تبلیغات فارسی" } else { "Remove Farsi ads" });
                 if self.prev_proxy != self.proxy || self.prev_proxy_enabled != self.proxy_enabled {
                     self.prev_proxy = self.proxy.clone();
                     self.prev_proxy_enabled = self.proxy_enabled;
