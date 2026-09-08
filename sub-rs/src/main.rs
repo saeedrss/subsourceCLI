@@ -1,10 +1,12 @@
 mod ads;
 mod clean;
 mod client;
+mod connect;
 mod gui;
 mod scan;
 mod updater;
 
+use crate::connect::{Connection, Mode};
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use std::path::PathBuf;
