@@ -1,5 +1,6 @@
 use crate::ads;
 use crate::client::Client;
+use crate::connect::{Connection, Mode};
 use crate::scan::{self, Stats};
 use crate::updater;
 use eframe::egui;
@@ -51,8 +52,9 @@ pub struct SubGui {
     no_lang_suffix: bool,
     recursive: bool,
     api_key: String,
-    proxy: String,
-    proxy_enabled: bool,
+    mode: Mode,
+    manual_proxy: String,
+    worker_url: String,
     clean_ads: bool,
     files: Vec<FileRow>,
     log_text: String,
@@ -66,8 +68,7 @@ pub struct SubGui {
     show_about: bool,
     show_update: bool,
     update_info: Option<updater::UpdateInfo>,
-    prev_proxy: String,
-    prev_proxy_enabled: bool,
+    prev_conn: Connection,
     ad_data: Vec<ads::AdData>,
     ad_textures: Vec<egui::TextureHandle>,
     textures_loaded: bool,
@@ -77,13 +78,13 @@ pub struct SubGui {
 }
 
 impl SubGui {
-    pub fn new(api_key: Option<String>, proxy: Option<String>, lang: &str, update: Option<updater::UpdateInfo>) -> Self {
+    pub fn new(api_key: Option<String>, conn: Connection, lang: &str, update: Option<updater::UpdateInfo>) -> Self {
         let (tx, rx) = mpsc::channel();
         let show_update = update.is_some();
         let fetch_tx = tx.clone();
-        let fetch_proxy = proxy.clone();
+        let fetch_conn = conn.clone();
         std::thread::spawn(move || {
-            let ads = ads::fetch_ads(fetch_proxy.as_deref());
+            let ads = ads::fetch_ads(&fetch_conn);
             fetch_tx.send(GuiEvent::AdsLoaded(ads)).ok();
         });
         SubGui {
@@ -94,8 +95,9 @@ impl SubGui {
             no_lang_suffix: false,
             recursive: true,
             api_key: api_key.unwrap_or_default(),
-            proxy: proxy.as_deref().unwrap_or("").to_string(),
-            proxy_enabled: false,
+            mode: conn.mode,
+            manual_proxy: conn.manual_proxy.clone().unwrap_or_default(),
+            worker_url: conn.worker_url.clone().unwrap_or_default(),
             clean_ads: false,
             files: Vec::new(),
             log_text: String::new(),
@@ -109,8 +111,7 @@ impl SubGui {
             show_about: false,
             show_update,
             update_info: update,
-            prev_proxy: String::new(),
-            prev_proxy_enabled: false,
+            prev_conn: conn,
             ad_data: Vec::new(),
             ad_textures: Vec::new(),
             textures_loaded: false,
@@ -120,15 +121,31 @@ impl SubGui {
         }
     }
 
+    fn current_connection(&self) -> Connection {
+        Connection {
+            mode: self.mode,
+            manual_proxy: if self.manual_proxy.is_empty() {
+                None
+            } else {
+                Some(self.manual_proxy.clone())
+            },
+            worker_url: if self.worker_url.is_empty() {
+                None
+            } else {
+                Some(self.worker_url.clone())
+            },
+        }
+    }
+
     fn start_scan(&mut self) {
         // ; pony: save config when user starts a scan
+        let conn = self.current_connection();
         if !self.api_key.is_empty() {
-            let proxy_save = if self.proxy.is_empty() { None } else { Some(self.proxy.as_str()) };
-            crate::save_config(&self.api_key, proxy_save).ok();
+            crate::save_config(&self.api_key, &conn).ok();
         }
 
         let api_key = self.api_key.clone();
-        let proxy = if self.proxy_enabled && !self.proxy.is_empty() { Some(self.proxy.clone()) } else { None };
+        let conn_clone = conn.clone();
         let top_n = self.top_n;
         let dry_run = self.dry_run;
         let recursive = self.recursive;
@@ -145,7 +162,7 @@ impl SubGui {
         self.sel = None;
 
         std::thread::spawn(move || {
-            let client = match Client::new(api_key, proxy) {
+            let client = match Client::new(api_key, &conn_clone) {
                 Ok(c) => c,
                 Err(e) => {
                     tx.send(GuiEvent::Log(format!("[ERROR] Failed to create client: {}\n", e))).ok();
@@ -214,26 +231,18 @@ impl SubGui {
 
     fn reload_ads(&self) {
         let tx = self.tx.clone();
-        let proxy = if self.proxy_enabled && !self.proxy.is_empty() {
-            Some(self.proxy.clone())
-        } else {
-            None
-        };
+        let conn = self.current_connection();
         std::thread::spawn(move || {
-            let ads = ads::fetch_ads(proxy.as_deref());
+            let ads = ads::fetch_ads(&conn);
             tx.send(GuiEvent::AdsLoaded(ads)).ok();
         });
     }
 
     fn recheck_update(&self) {
         let tx = self.tx.clone();
-        let proxy = if self.proxy_enabled && !self.proxy.is_empty() {
-            Some(self.proxy.clone())
-        } else {
-            None
-        };
+        let conn = self.current_connection();
         std::thread::spawn(move || {
-            let result = updater::check_for_update(env!("CARGO_PKG_VERSION"), proxy.as_deref());
+            let result = updater::check_for_update(env!("CARGO_PKG_VERSION"), &conn);
             tx.send(GuiEvent::UpdateResult(result)).ok();
         });
     }
@@ -372,12 +381,23 @@ impl eframe::App for SubGui {
             ui.horizontal(|ui| {
                 ui.label(if self.lang_fa { "API Key:" } else { "API Key:" });
                 ui.add(egui::TextEdit::singleline(&mut self.api_key).password(true).hint_text("sk_..."));
-                ui.checkbox(&mut self.proxy_enabled, if self.lang_fa { "پروکسی" } else { "Proxy" });
-                ui.add_enabled(self.proxy_enabled, egui::TextEdit::singleline(&mut self.proxy).hint_text("http://ip:port / socks5://ip:port"));
                 ui.checkbox(&mut self.clean_ads, if self.lang_fa { "حذف تبلیغات فارسی" } else { "Remove Farsi ads" });
-                if self.prev_proxy != self.proxy || self.prev_proxy_enabled != self.proxy_enabled {
-                    self.prev_proxy = self.proxy.clone();
-                    self.prev_proxy_enabled = self.proxy_enabled;
+            });
+            ui.horizontal(|ui| {
+                ui.label(if self.lang_fa { "اتصال:" } else { "Connect:" });
+                ui.radio_value(&mut self.mode, Mode::Direct, if self.lang_fa { "مستقیم" } else { "Direct" });
+                ui.radio_value(&mut self.mode, Mode::System, if self.lang_fa { "سیستم" } else { "System proxy" });
+                ui.radio_value(&mut self.mode, Mode::Manual, if self.lang_fa { "پروکسی دستی" } else { "Manual proxy" });
+                ui.radio_value(&mut self.mode, Mode::Cloudflare, if self.lang_fa { "کلادفلر" } else { "Cloudflare" });
+                if self.mode == Mode::Manual {
+                    ui.add_enabled(true, egui::TextEdit::singleline(&mut self.manual_proxy).hint_text("http://ip:port / socks5://ip:port"));
+                }
+                if self.mode == Mode::Cloudflare {
+                    ui.add_enabled(true, egui::TextEdit::singleline(&mut self.worker_url).hint_text("https://<name>.workers.dev"));
+                }
+                let cur = self.current_connection();
+                if self.prev_conn != cur {
+                    self.prev_conn = cur;
                     self.recheck_update();
                     self.reload_ads();
                 }
