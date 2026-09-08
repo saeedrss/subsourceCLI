@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.5] - 2026-09-08
+
+### Added
+- Connection methods: Direct / System proxy / Manual proxy / Cloudflare Worker
+  (`--connect` + `--worker` CLI flags, GUI radio buttons, persisted in config)
+- Cloudflare Worker reverse proxy (`cloudflare-worker/`) to bypass ISP blocking
+  of `api.subsource.net`
+
 ## [1.1.4] - 2026-09-05
 
 ### Added

@@ -53,6 +53,8 @@ cargo build --release
 | `--api-key` | متغیر محیطی `SUBSOURCE_API_KEY` (در نبودِ آن، کلید داخلی) | کلید API |
 | `-l, --lang` | `fa` | کد زبان مقصد (fa, en, ar, fr, de, ...) |
 | `--proxy` | — | آدرس پروکسی |
+| `--connect` | `direct` | روش اتصال: `direct`، `system`، `manual`، `cloudflare` |
+| `--worker` | — | آدرس Worker کلادفلر (با `--connect cloudflare`) |
 | `--dry-run` | — | فقط نمایش عملیات بدون دانلود واقعی |
 | `--no-recursive` | — | فقط پوشه ریشه را اسکن کن |
 | `--clean-ads` | — | حذف خطوط تبلیغات و برند از زیرنویس فارسی دانلودشده |
@@ -88,6 +90,28 @@ sub/
 - **درباره** — پنجره با اطلاعات نسخه و لینک گیت‌هاب
 - **نمایش جزئیات** — لاگ به‌تفکیک هر فایل
 - **Dry Run** — تست بدون دانلود واقعی
+
+## روش‌های اتصال
+
+برنامه با چهار روش به API متصل می‌شود (در GUI با دکمه‌های رادیویی، در CLI با
+`--connect`):
+
+- **مستقیم** — بدون پروکسی
+- **پروکسی سیستم** — استفاده خودکار از پروکسی سیستم/محیط
+- **پروکسی دستی** — آدرس پروکسی که خودتان وارد می‌کنید
+- **کلادفلر** — عبور از طریق
+  [Cloudflare Worker](cloudflare-worker/) که به
+  `api.subsource.net` فوروارد می‌کند؛ برای وقتی که ISP دسترسی مستقیم به API
+  را مسدود یا محدود کرده است
+
+```bash
+# مستقیم (پیش‌فرض)
+./sub-rs --directory "/path/to/videos"
+# پروکسی دستی
+./sub-rs --connect manual --proxy "http://127.0.0.1:8080" --directory "/path/to/videos"
+# کلادفلر
+./sub-rs --connect cloudflare --worker "https://subsource-proxy.example.workers.dev" --directory "/path/to/videos"
+```
 
 ## زبان‌های پشتیبانی شده
 

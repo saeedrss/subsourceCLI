@@ -70,6 +70,8 @@ cargo build --release
 | `--dry-run` | — | Log actions without downloading |
 | `--no-recursive` | — | Only scan directory root |
 | `--proxy` | `None` | Proxy URL (e.g. `http://127.0.0.1:8080`) |
+| `--connect` | `direct` | Connection method: `direct`, `system`, `manual`, `cloudflare` |
+| `--worker` | `None` | Cloudflare Worker URL (with `--connect cloudflare`) |
 | `--skip-existing` | — | Skip videos that already have a subtitle |
 | `--no-lang-suffix` | — | Save as `movie.srt` without the language suffix |
 | `--clean-ads` | — | Strip Farsi ad & brand lines from downloaded `fa` subtitles |
@@ -85,6 +87,28 @@ video.fa.srt          ← best match (extracted and renamed; or video.srt with -
 sub/
   video_sub1_*.zip    ← best match (ZIP backup)
   video_sub2_*.zip    ← alternatives (up to --top)
+```
+
+## 🔌 Connection methods
+
+The app can reach the SubSource API four ways (CLI `--connect`, or the radio
+buttons in the GUI):
+
+- **Direct** — no proxy at all.
+- **System proxy** — use the OS/environment proxy automatically.
+- **Manual proxy** — a proxy URL you type in (e.g. `http://ip:port`,
+  `socks5://ip:port`).
+- **Cloudflare** — route through a [Cloudflare Worker](cloudflare-worker/)
+  that forwards to `api.subsource.net`, useful when your ISP blocks or
+  throttles the API host directly.
+
+```bash
+# direct (default)
+./sub-rs --directory "/path/to/videos"
+# manual proxy
+./sub-rs --connect manual --proxy "http://127.0.0.1:8080" --directory "/path/to/videos"
+# cloudflare worker
+./sub-rs --connect cloudflare --worker "https://subsource-proxy.example.workers.dev" --directory "/path/to/videos"
 ```
 
 ## ✨ Features
