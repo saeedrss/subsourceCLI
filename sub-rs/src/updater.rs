@@ -1,4 +1,6 @@
+use crate::connect::Connection;
 use serde::Deserialize;
+use std::time::Duration;
 
 const RELEASES_URL: &str = "https://api.github.com/repos/saeedrss/subsourceCLI/releases/latest";
 const TIMEOUT_SECS: u64 = 5;
@@ -22,18 +24,8 @@ fn parse_version(v: &str) -> Vec<u32> {
         .collect()
 }
 
-pub fn check_for_update(current: &str, proxy: Option<&str>) -> Option<UpdateInfo> {
-    let mut builder = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(TIMEOUT_SECS))
-        .user_agent("sub-rs/1.0");
-    if let Some(p) = proxy {
-        if !p.is_empty() {
-            if let Ok(proxy) = reqwest::Proxy::all(p) {
-                builder = builder.proxy(proxy);
-            }
-        }
-    }
-    let client = match builder.build() {
+pub fn check_for_update(current: &str, conn: &Connection) -> Option<UpdateInfo> {
+    let client = match conn.build_reqwest(Duration::from_secs(TIMEOUT_SECS), "sub-rs/1.0") {
         Ok(c) => c,
         Err(_) => return None,
     };

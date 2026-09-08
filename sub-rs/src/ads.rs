@@ -1,4 +1,6 @@
+use crate::connect::Connection;
 use serde::Deserialize;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct AdData {
@@ -16,8 +18,11 @@ struct RepoEntry {
     download_url: Option<String>,
 }
 
-pub fn fetch_ads(proxy: Option<&str>) -> Vec<AdData> {
-    let client = http_client(proxy);
+pub fn fetch_ads(conn: &Connection) -> Vec<AdData> {
+    let client = match conn.build_reqwest(Duration::from_secs(10), "sub-rs") {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
     let entries = match list_ads_folder(&client) {
         Ok(e) => e,
         Err(_) => return Vec::new(),
@@ -45,20 +50,6 @@ pub fn fetch_ads(proxy: Option<&str>) -> Vec<AdData> {
     }
 
     ads
-}
-
-fn http_client(proxy: Option<&str>) -> reqwest::blocking::Client {
-    let mut builder = reqwest::blocking::Client::builder()
-        .user_agent("sub-rs")
-        .timeout(std::time::Duration::from_secs(10));
-    if let Some(p) = proxy {
-        if !p.is_empty() {
-            if let Ok(proxy) = reqwest::Proxy::all(p) {
-                builder = builder.proxy(proxy);
-            }
-        }
-    }
-    builder.build().unwrap_or_else(|_| reqwest::blocking::Client::new())
 }
 
 fn list_ads_folder(client: &reqwest::blocking::Client) -> Result<Vec<RepoEntry>, String> {
