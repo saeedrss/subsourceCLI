@@ -1,9 +1,9 @@
+use crate::connect::Connection;
 use anyhow::Result;
 use serde::Deserialize;
 use std::path::Path;
 use std::time::Duration;
 
-const API_BASE: &str = "https://api.subsource.net/api/v1";
 const REQUEST_DELAY_SECS: f64 = 1.0;
 
 #[derive(Debug, Deserialize)]
@@ -53,6 +53,7 @@ pub struct Rating {
 pub struct Client {
     http: reqwest::blocking::Client,
     api_key: String,
+    api_base: String,
 }
 
 fn parse_response<T: serde::de::DeserializeOwned>(text: &str) -> Result<Vec<T>> {
@@ -76,16 +77,14 @@ fn rate_limit() {
 }
 
 impl Client {
-    pub fn new(api_key: String, proxy: Option<String>) -> Result<Self> {
-        let mut builder = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-        if let Some(p) = proxy {
-            builder = builder.proxy(reqwest::Proxy::all(&p)?);
-        }
+    pub fn new(api_key: String, conn: &Connection) -> Result<Self> {
         Ok(Client {
-            http: builder.build()?,
+            http: conn.build_reqwest(
+                Duration::from_secs(30),
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            )?,
             api_key,
+            api_base: conn.api_base(),
         })
     }
 
@@ -104,7 +103,7 @@ impl Client {
         }
         let resp = self
             .http
-            .get(format!("{}/movies/search", API_BASE))
+            .get(format!("{}/movies/search", self.api_base))
             .headers(self.headers())
             .query(&params)
             .send()?;
@@ -122,7 +121,7 @@ impl Client {
         ];
         let resp = self
             .http
-            .get(format!("{}/subtitles", API_BASE))
+            .get(format!("{}/subtitles", self.api_base))
             .headers(self.headers())
             .query(&params)
             .send()?;
@@ -134,7 +133,7 @@ impl Client {
         rate_limit();
         let resp = self
             .http
-            .get(format!("{}/subtitles/{}/download", API_BASE, subtitle_id))
+            .get(format!("{}/subtitles/{}/download", self.api_base, subtitle_id))
             .headers(self.headers())
             .send()?;
         let bytes = resp.error_for_status()?.bytes()?;
